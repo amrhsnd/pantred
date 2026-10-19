@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pantred | Market Monitor</title>
+  <link rel="stylesheet" href="/static/monitor.css">
+  <script src="/static/plotly.min.js" defer></script>
+  <script src="/static/monitor.js" defer></script>
+</head>
+<body>
+  <header><div class="brand">PANTRED <span>Market Monitor</span></div><nav aria-label="Main navigation"><a href="/" aria-current="page">Hyperliquid</a><a href="/yahoo">Yahoo collector</a><a href="/guide">User guide</a><a href="/history">Project history</a></nav></header>
+  <main>
+    <section class="heading"><div><p class="eyebrow">HYPERLIQUID / MAINNET</p><h1>Perpetual markets</h1><p class="muted">Market data only <span class="sep">/</span> BTC, ETH, SOL</p></div><div class="actions"><span id="recorder-state" role="status">Recorder stopped</span><button id="record">Start recording</button><button id="stop" class="secondary" disabled>Stop recording</button></div></section>
+    <div id="error" role="alert" hidden></div>
+    <section class="toolbar" aria-label="Chart controls">
+      <label>Market<select id="symbol"><option>BTC</option><option>ETH</option><option>SOL</option></select></label>
+      <label>Timeframe<select id="interval"><option value="1m">1 minute</option><option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="1h">1 hour</option></select></label>
+      <label>Window<select id="window"><option value="60">60 candles</option><option value="180" selected>180 candles</option><option value="500">500 candles</option></select></label>
+      <fieldset><legend>Candle type</legend><label><input type="radio" name="style" value="standard" checked> Standard</label><label><input type="radio" name="style" value="ha"> Heikin Ashi</label></fieldset>
+      <span id="freshness" class="muted">No observations yet</span>
+    </section>
+    <section class="metrics" aria-label="Market statistics">
+      <div><span>Mark price</span><strong id="mark">--</strong></div>
+      <div><span>Oracle price</span><strong id="oracle">--</strong></div>
+      <div><span>Funding rate</span><strong id="funding">--</strong></div>
+      <div><span>Open interest <small id="oi-unit">BTC</small></span><strong id="oi">--</strong></div>
+      <div><span>24h notional volume</span><strong id="volume">--</strong></div>
+      <div><span>Bid/ask spread</span><strong id="spread">--</strong></div>
+    </section>
+    <section class="chart-section"><div class="section-title"><h2 id="chart-title">BTC / 1m</h2><span id="candle-status" class="muted">No recorded candles</span></div><div id="chart" role="img" aria-label="Price candles and traded volume"></div><p id="empty" class="empty">No recorded data yet.</p></section>
+    <section class="details">
+      <div><div class="section-title"><h2>Order book</h2><span id="book-age" class="muted">--</span></div><div class="book-grid"><div><h3 class="positive">Bids</h3><table><thead><tr><th>Price</th><th>Size</th></tr></thead><tbody id="bids"></tbody></table></div><div><h3 class="negative">Asks</h3><table><thead><tr><th>Price</th><th>Size</th></tr></thead><tbody id="asks"></tbody></table></div></div></div>
+      <div><div class="section-title"><h2>Recent trades</h2><span class="muted">UTC</span></div><div class="table-scroll"><table><thead><tr><th>Time</th><th>Side</th><th>Price</th><th>Size</th></tr></thead><tbody id="trades"></tbody></table></div></div>
+    </section>
+    <section class="events"><div class="section-title"><h2>Collector activity</h2><span class="muted">UTC</span></div><ul id="events"></ul></section>
+    <footer>Source: Hyperliquid public feeds <span>Local recording / No order execution</span></footer>
+  </main>
+</body>
+</html>

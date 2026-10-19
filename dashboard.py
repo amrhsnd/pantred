@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import html
 import json
+import argparse
+import errno
+import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -10,6 +13,7 @@ from urllib.request import Request, urlopen
 import pandas as pd
 
 from data_collection import CollectionRequest, MarketDataCollector
+from monitor import Monitor, ROOT
 
 
 HOST = "127.0.0.1"
@@ -377,6 +381,7 @@ def render_page() -> bytes:
 <body>
   <header>
     <h1>Pantred Data Collector</h1>
+    <p><a href="/">Hyperliquid monitor</a> | <a href="/guide">User guide</a></p>
     <p class="subtitle">Choose the market, candle timeframe, and collection window, then export clean OHLCV data for chart generation and trend-image experiments.</p>
   </header>
   <main>
@@ -583,14 +588,76 @@ def selected_attr(condition: bool) -> str:
 class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed_url = urlparse(self.path)
+        if parsed_url.path == "/":
+            self.send_bytes((ROOT / "web/monitor.html").read_bytes(), "text/html; charset=utf-8")
+            return
+        assets = {"/static/monitor.css": ("monitor.css", "text/css"),
+                  "/static/monitor.js": ("monitor.js", "text/javascript")}
+        if parsed_url.path in assets:
+            name, mime = assets[parsed_url.path]
+            self.send_bytes((ROOT / "web" / name).read_bytes(), mime)
+            return
+        if parsed_url.path == "/static/plotly.min.js":
+            from plotly.offline import get_plotlyjs
+            self.send_bytes(get_plotlyjs().encode(), "text/javascript")
+            return
+        if parsed_url.path in {"/guide", "/history"}:
+            name = "USER_GUIDE.md" if parsed_url.path == "/guide" else "PROJECT_HISTORY.md"
+            contents = escape((ROOT / "docs" / name).read_text())
+            page = f'''<!doctype html><html lang="en"><meta charset="utf-8">
+                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <title>Pantred documentation</title><link rel="stylesheet" href="/static/monitor.css">
+                <main><a href="/">Back to market monitor</a>
+                <pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:15px/1.8 system-ui;max-width:900px">{contents}</pre></main></html>'''
+            self.send_bytes(page.encode(), "text/html; charset=utf-8")
+            return
+        if parsed_url.path == "/api/monitor":
+            query = parse_qs(parsed_url.query)
+            try:
+                limit = int(query.get("limit", ["180"])[0])
+                if not 1 <= limit <= 500:
+                    raise ValueError("Limit must be between 1 and 500")
+                data = self.server.monitor.snapshot(query.get("symbol", ["BTC"])[0],
+                                                    query.get("interval", ["1m"])[0], limit)
+                self.send_json(data)
+            except ValueError as exc:
+                self.send_json({"error": str(exc)}, 400)
+            except sqlite3.Error:
+                self.send_json({"error": "Database temporarily unavailable"}, 503)
+            return
         if parsed_url.path == "/api/symbols":
             query = parse_qs(parsed_url.query).get("q", [""])[0]
-            self.send_json(search_symbols(query))
+            try:
+                self.send_json(search_symbols(query))
+            except Exception:
+                self.send_json({"error": "Yahoo symbol search unavailable"}, 502)
             return
-
-        self.send_page()
+        if parsed_url.path == "/yahoo":
+            self.send_page()
+        else:
+            self.send_error(404)
 
     def do_POST(self) -> None:
+        if self.path == "/api/recorder":
+            port = self.server.server_port
+            origin = self.headers.get("Origin")
+            if origin and origin not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}:
+                self.send_json({"error": "Cross-origin request rejected"}, 403)
+                return
+            if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                self.send_json({"error": "Expected JSON"}, 415)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 1024:
+                    raise ValueError("Invalid request size")
+                data = json.loads(self.rfile.read(length))
+                if not isinstance(data, dict):
+                    raise ValueError("Expected an object")
+                self.send_json(self.server.monitor.control(data.get("action")))
+            except (ValueError, OSError) as exc:
+                self.send_json({"error": str(exc)}, 400)
+            return
         if self.path != "/collect":
             self.send_error(404)
             return
@@ -615,22 +682,44 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def send_json(self, data: object) -> None:
-        payload = json.dumps(data).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+    def send_bytes(self, payload: bytes, mime: str, status: int = 200) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", mime)
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def send_json(self, data: object, status: int = 200) -> None:
+        payload = json.dumps(data).encode("utf-8")
+        self.send_bytes(payload, "application/json; charset=utf-8", status)
 
     def log_message(self, format: str, *args: object) -> None:
         return
 
 
-def main() -> None:
-    server = ThreadingHTTPServer((HOST, PORT), DashboardHandler)
-    print(f"Pantred dashboard running at http://{HOST}:{PORT}")
-    server.serve_forever()
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(description="Pantred local market monitor")
+    parser.add_argument("--port", type=int, default=PORT)
+    args = parser.parse_args(argv)
+    for port in range(args.port, args.port + 10):
+        try:
+            server = ThreadingHTTPServer((HOST, port), DashboardHandler)
+            break
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                raise
+    else:
+        raise OSError("No available dashboard port; choose another with --port")
+    server.monitor = Monitor()
+    print(f"Pantred dashboard running at http://{HOST}:{port}", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.monitor.control("stop")
+        server.server_close()
 
 
 if __name__ == "__main__":

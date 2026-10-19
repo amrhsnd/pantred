@@ -39,11 +39,19 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "hyperliquid":
+        from data_collection.hyperliquid_cli import main as hyperliquid_main
+        hyperliquid_main(sys.argv[2:])
+        return
+
     if len(sys.argv) == 1:
-        print("Pantred data collector")
-        print("Run the dashboard with: python3 dashboard.py")
-        print("Or use the CLI, for example:")
-        print("python3 main.py --symbols AAPL BTC-USD --timeframes 1d --period 6mo --heikin-ashi")
+        from dashboard import main as dashboard_main
+        dashboard_main([])
+        return
+
+    if sys.argv[1] == "dashboard":
+        from dashboard import main as dashboard_main
+        dashboard_main(sys.argv[2:])
         return
 
     args = parse_args()
