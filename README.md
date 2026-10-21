@@ -18,6 +18,7 @@ recording** when finished; the saved history remains visible.
 
 - [User guide](docs/USER_GUIDE.md): startup, controls, files and troubleshooting.
 - [Project history](docs/PROJECT_HISTORY.md): milestones, decisions and shipped/planned scope.
+- [VM recording test](docs/VM_RECORDING_TEST.md): 24-hour snapshot results, repeatable VM recording, and fixed local viewing.
 
 The app currently collects and monitors data. The paper-trading engine is not
 implemented yet. Yahoo collection remains available at `/yahoo`.

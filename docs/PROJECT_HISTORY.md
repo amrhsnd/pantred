@@ -24,12 +24,11 @@ columns. A local browser dashboard added collection controls, CSV previews and
 Yahoo symbol search. Unit tests and generated-file exclusions were added.
 
 The data-collector branch was pushed to GitHub on 6 June. This was a branch push,
-not a merge into main. At the time of this document's creation, 004e6dc is the
-latest local commit; newer work is described below.
+not a merge into main. Subsequent Hyperliquid work is described below.
 
 ## 23 September 2026: Paper-trading direction and Hyperliquid
 
-Status: working tree.
+Committed in 33a1757, "Add Hyperliquid market recorder and local monitor".
 
 The target became a future perpetual-futures trading bot, beginning with paper
 trading and an approximately $300 virtual account. Hyperliquid was selected as
@@ -52,7 +51,7 @@ collection are implemented; free X access has not been established.
 
 ## 23 September 2026: A visible market monitor and usage guide
 
-Status: working tree.
+Committed in 33a1757, "Add Hyperliquid market recorder and local monitor".
 
 The command-line-only Hyperliquid workflow was difficult to use alongside the
 older Yahoo dashboard. Running main.py without arguments now starts the local
@@ -62,6 +61,20 @@ and trades, and distinguish a running recorder from stale observations.
 
 The Yahoo collector remains at /yahoo. Documentation is available in docs/ and
 from the dashboard navigation. These pages describe current behavior and limits.
+
+## 20–21 October 2026: First long VM recording test
+
+A 25-hour BTC/ETH/SOL recording was launched on an AWS VM in Stockholm, using
+one-minute candles and a one-hour initial candle backfill. A consistent local
+snapshot taken after 24 hours 33 minutes passed SQLite integrity and complete
+minute-slot checks. It contains 547,671 trades and 307,754 observations, with
+eight successful reconnects after WebSocket expiry and no recorded failure.
+
+This is an interim result: the snapshot precedes the scheduled end, contains no
+stopped event, and cannot establish trade/book completeness across reconnects.
+The [VM test report](VM_RECORDING_TEST.md) records the measured coverage and
+remaining limits. Reusable scripts support bounded recording, read-only health
+checks, SQLite online snapshots, auditing and a fixed local snapshot dashboard.
 
 ## Current boundaries
 
