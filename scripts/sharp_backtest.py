@@ -12,24 +12,34 @@ import webbrowser
 
 ROOT = Path(__file__).resolve().parents[1]
 MINUTE = 60_000
+NOTIONAL = Decimal("1000")
+MAKER_RATE = Decimal("0.00015")
+TAKER_RATE = Decimal("0.00045")
 SNAPSHOT = ROOT / "data/hyperliquid/aws-run/soak-snapshot-2026-10-21-1416utc.sqlite3"
 
 
 def replay_order(entry, stop, target, active, expiry, end, times, prices):
     result = dict(entry=float(entry), stop=float(stop), target=float(target),
-                  fill=None, exit=None, pnl=None,
+                  fill=None, exit=None, pnl=None, gross=None, fees=0, reason=None,
                   status="Expired" if expiry <= end else "Pending")
     for index in range(bisect_left(times, active), bisect_left(times, expiry)):
         if prices[index] > entry:
             continue
-        result.update(fill=times[index], status="Open")
+        entry_fee = NOTIONAL * MAKER_RATE
+        result.update(fill=times[index], status="Open", fees=float(entry_fee))
         for tick in range(index, len(times)):
             price = prices[tick]
             if price <= stop or price >= target:
                 exit_price = price if price <= stop else target
-                result.update(exit=times[tick], out=float(exit_price),
-                              pnl=float(1000 * (exit_price / entry - 1)),
-                              status="Loss" if price <= stop else "Win")
+                stopped = price <= stop
+                exit_notional = NOTIONAL * exit_price / entry
+                fees = entry_fee + exit_notional * (TAKER_RATE if stopped else MAKER_RATE)
+                gross = exit_notional - NOTIONAL
+                net = gross - fees
+                result.update(exit=times[tick], out=float(exit_price), gross=float(gross),
+                              fees=float(fees), pnl=float(net),
+                              reason="Stop" if stopped else "Target",
+                              status="Win" if net > 0 else "Loss" if net < 0 else "Flat")
                 break
         break
     return result
@@ -96,8 +106,8 @@ def backtest(bars, times, prices, start, end, history, degree, expiration):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, default=SNAPSHOT)
-    parser.add_argument("--sharp-history", type=int, nargs="+", default=[20, 10])
-    parser.add_argument("--sharp-degree", type=int, nargs="+", default=[100, 168, 250])
+    parser.add_argument("--sharp-history", type=int, nargs="+", default=[30, 20, 10])
+    parser.add_argument("--sharp-degree", type=int, nargs="+", default=[68, 100, 168, 250])
     parser.add_argument("--order-expiration", type=int, default=10)
     parser.add_argument("--output", type=Path, default=ROOT / "data/processed/BTC-1m-backtest.html")
     parser.add_argument("--open", action="store_true", help="Open report in your default browser")

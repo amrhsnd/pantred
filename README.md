@@ -202,4 +202,6 @@ python3 scripts/sharp_backtest.py --open
 
 Send `data/processed/BTC-1m-backtest.html` to share the result. The recipient can open it in a browser offline. The exporter uses Python's standard library. Use `--database PATH` for another Pantred SQLite recording with BTC trade prints and one-minute candles. The replay covers whole minutes within the recorded trade window. Use `--help` for the sharpness, lookback, expiration and output options.
 
-The default BTC report compares sharp degrees 100%, 168% and 250% over histories of 20 and 10 candles. Choose either parameter above the chart. For a custom grid, pass multiple integers to each flag, e.g. `--sharp-degree 68 100 --sharp-history 30 20`.
+The default BTC report compares sharp degrees 68%, 100%, 168% and 250% over histories of 30, 20 and 10 candles. Choose either parameter above the chart. For a custom grid, pass multiple integers to each flag, e.g. `--sharp-degree 68 100 --sharp-history 30 20`.
+
+BTC replay fees use the Hyperliquid base perpetual tier. Resting entries and target exits assume a 0.015% maker fee, and stop exits assume a 0.045% taker fee. Each fee uses its executed notional. Win rate and profit factor use after-fee closed trades. Funding and additional slippage are excluded.
