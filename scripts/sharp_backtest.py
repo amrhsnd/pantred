@@ -35,7 +35,7 @@ def replay_order(entry, stop, target, active, expiry, end, times, prices):
     return result
 
 
-def backtest(connection, history, degree, expiration):
+def load_recording(connection, history):
     first, last = connection.execute(
         "SELECT min(event_ms), max(event_ms) FROM trades WHERE symbol='BTC'"
     ).fetchone()
@@ -62,6 +62,10 @@ def backtest(connection, history, degree, expiration):
         times.append(time)
         prices.append(Decimal(price))
 
+    return bars, times, prices, start, end
+
+
+def backtest(bars, times, prices, start, end, history, degree, expiration):
     sharp, orders = [], []
     invalid = 0
     ranges = [high - low for _, _, high, low, _ in bars]
@@ -86,20 +90,19 @@ def backtest(connection, history, degree, expiration):
                              end, times, prices)
         order.update(i=index, side="Green" if middle_change > 0 else "Red")
         orders.append(order)
-    return {"BTC": dict(bars=[[t, *map(float, values)] for t, *values in bars],
-                        orders=orders, invalid=invalid)}, start, end
+    return dict(history=history, degree=degree, orders=orders, invalid=invalid)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, default=SNAPSHOT)
-    parser.add_argument("--sharp-history", type=int, default=30)
-    parser.add_argument("--sharp-degree", type=int, default=68)
+    parser.add_argument("--sharp-history", type=int, nargs="+", default=[20, 10])
+    parser.add_argument("--sharp-degree", type=int, nargs="+", default=[100, 168, 250])
     parser.add_argument("--order-expiration", type=int, default=10)
     parser.add_argument("--output", type=Path, default=ROOT / "data/processed/BTC-1m-backtest.html")
     parser.add_argument("--open", action="store_true", help="Open report in your default browser")
     args = parser.parse_args()
-    if args.sharp_history < 1 or args.sharp_degree < 0 or args.order_expiration < 1:
+    if min(args.sharp_history) < 1 or min(args.sharp_degree) < 0 or args.order_expiration < 1:
         parser.error("History and expiration must be positive and degree must be nonnegative.")
     if not args.database.is_file():
         parser.error("Snapshot missing. Pass --database with a Pantred SQLite recording.")
@@ -107,10 +110,14 @@ def main():
         parser.error("Choose a separate .html file for the report.")
     with closing(sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         db.execute("BEGIN")
-        data, start, end = backtest(db, args.sharp_history, args.sharp_degree, args.order_expiration)
+        bars, times, prices, start, end = load_recording(db, max(args.sharp_history))
+    runs = [backtest(bars, times, prices, start, end, history, degree, args.order_expiration)
+            for degree in dict.fromkeys(args.sharp_degree)
+            for history in dict.fromkeys(args.sharp_history)]
+    data = dict(bars=[[t, *map(float, values)] for t, *values in bars], runs=runs)
     dates = [datetime.fromtimestamp(t / 1000, timezone.utc).strftime("%Y-%m-%d %H:%M") for t in (start, end)]
     substitutions = dict(DATA=json.dumps(data, separators=(",", ":")), WINDOW=" – ".join(dates)+" UTC",
-                         DEGREE=args.sharp_degree, HISTORY=args.sharp_history, EXPIRY=args.order_expiration)
+                         EXPIRY=args.order_expiration)
     report = (ROOT / "web/sharp_candle.html").read_text(encoding="utf-8")
     for key, value in substitutions.items():
         report = report.replace("{{"+key+"}}", str(value))
