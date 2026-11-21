@@ -205,3 +205,5 @@ Send `data/processed/BTC-1m-backtest.html` to share the result. The recipient ca
 The default BTC report compares sharp degrees 68%, 100%, 168% and 250% over histories of 30, 20 and 10 candles. Choose either parameter above the chart. For a custom grid, pass multiple integers to each flag, e.g. `--sharp-degree 68 100 --sharp-history 30 20`.
 
 BTC replay fees use the Hyperliquid base perpetual tier. Resting entries and target exits assume a 0.015% maker fee, and stop exits assume a 0.045% taker fee. Each fee uses its executed notional. Win rate and profit factor use after-fee closed trades. Funding and additional slippage are excluded.
+
+The buy limit uses candle 3’s low and the stop uses candle 1’s low. Matching candle 2 and 3 colors target candle 3’s high. Otherwise the target equals the entry and the setup is skipped.

@@ -91,7 +91,7 @@ def backtest(bars, times, prices, start, end, history, degree, expiration):
         middle = bars[index-1]
         middle_change = middle[4] - middle[1]
         stop = bars[index-2][3]
-        target = close if (close - opening) * middle_change > 0 else opening
+        target = high if (close - opening) * middle_change > 0 else low
         if not stop < low < target:
             invalid += 1
             continue
