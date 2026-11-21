@@ -10,6 +10,8 @@ from pathlib import Path
 import sqlite3
 import webbrowser
 
+from trade_preview import preview
+
 ROOT = Path(__file__).resolve().parents[1]
 MINUTE = 60_000
 NOTIONAL = Decimal("1000")
@@ -127,7 +129,7 @@ def main():
     data = dict(bars=[[t, *map(float, values)] for t, *values in bars], runs=runs)
     dates = [datetime.fromtimestamp(t / 1000, timezone.utc).strftime("%Y-%m-%d %H:%M") for t in (start, end)]
     substitutions = dict(DATA=json.dumps(data, separators=(",", ":")), WINDOW=" – ".join(dates)+" UTC",
-                         EXPIRY=args.order_expiration)
+                         EXPIRY=args.order_expiration, PREVIEW=preview(data, args.order_expiration))
     report = (ROOT / "web/sharp_candle.html").read_text(encoding="utf-8")
     for key, value in substitutions.items():
         report = report.replace("{{"+key+"}}", str(value))
