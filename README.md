@@ -191,3 +191,13 @@ data/raw/
 
 Yahoo Finance has interval limitations. Intraday intervals such as `1m`, `5m`,
 `15m`, and `1h` usually only work for recent periods.
+
+## Bitcoin one-minute sharp candle backtest
+
+From the repository root, replay the October VM snapshot and open its interactive order ledger and candlestick chart:
+
+```bash
+python3 scripts/sharp_backtest.py --open
+```
+
+Send `data/processed/BTC-1m-backtest.html` to share the result. The recipient can open it in a browser offline. The exporter uses Python's standard library. Use `--database PATH` for another Pantred SQLite recording with BTC trade prints and one-minute candles. The replay covers whole minutes within the recorded trade window. Use `--help` for the sharpness, lookback, expiration and output options.
