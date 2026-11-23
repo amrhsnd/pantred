@@ -48,7 +48,7 @@ def preview(data, expiry):
     pieces = ['<p>Choose a setting, then tap an order to see its chart. F marks the fill and X marks the exit.</p>']
     for idx, run in enumerate(data["runs"]):
         orders = run["orders"]
-        net = sum((o["gross"] or 0) - o["fees"] for o in orders)
+        net = sum((o["gross"] or 0) - o["fees"] + o.get("funding", 0) for o in orders)
         filled = sum(o["fill"] is not None for o in orders)
         pieces.append(f'<details {"open" if idx == 0 else ""}><summary><b>{run["degree"]}% degree · '
                       f'{run["history"]} candles</b> · net ${net:,.2f}</summary>'

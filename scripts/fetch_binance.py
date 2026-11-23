@@ -1,4 +1,4 @@
-"""Download complete UTC days of Binance spot candles; no recorder or API key."""
+"""Download Binance spot or USD-M perpetual candles; no recorder or API key."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -14,11 +14,14 @@ import tempfile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from urllib.parse import urlencode
 import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVES = "https://data.binance.vision/data/spot/daily/klines"
+FUTURES_ARCHIVES = "https://data.binance.vision/data/futures/um/daily/klines"
+FUNDING_API = "https://fapi.binance.com/fapi/v1/fundingRate"
 INTERVALS = {"1m": 60_000, "5m": 300_000, "15m": 900_000}
 FIELDS = [
     "symbol", "timeframe", "datetime", "open_time_ms", "open", "high", "low",
@@ -60,7 +63,11 @@ def parse_archive(payload, checksum, filename, symbol, interval, day):
         if archive.namelist() != [expected_member]:
             raise ValueError(f"Unexpected archive contents: {filename}")
         with archive.open(expected_member) as member:
-            for row in csv.reader(io.TextIOWrapper(member, encoding="utf-8")):
+            for number, row in enumerate(csv.reader(io.TextIOWrapper(member, encoding="utf-8"))):
+                if number == 0 and row == ["open_time", "open", "high", "low", "close", "volume",
+                                           "close_time", "quote_volume", "count", "taker_buy_volume",
+                                           "taker_buy_quote_volume", "ignore"]:
+                    continue
                 if len(row) != 12:
                     raise ValueError(f"Unexpected candle schema: {filename}")
                 opened, closed = milliseconds(row[0]), milliseconds(row[6])
@@ -85,12 +92,13 @@ def parse_archive(payload, checksum, filename, symbol, interval, day):
     return records, actual_hash
 
 
-def fetch_interval(symbol, interval, start, end):
+def fetch_interval(symbol, interval, start, end, market="spot"):
     records, sources = [], []
     day = start
     while day < end:
         filename = f"{symbol}-{interval}-{day:%Y-%m-%d}.zip"
-        url = f"{ARCHIVES}/{symbol}/{interval}/{filename}"
+        base = FUTURES_ARCHIVES if market == "usdm" else ARCHIVES
+        url = f"{base}/{symbol}/{interval}/{filename}"
         try:
             payload = get_bytes(url)
             checksum = get_bytes(url + ".CHECKSUM")
@@ -111,14 +119,62 @@ def utc_date(value):
     return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
 
+def validate_funding(rows, symbol, start_ms, end_ms):
+    times = [int(row["fundingTime"]) for row in rows]
+    if not rows or times != sorted(set(times)):
+        raise ValueError("Missing, duplicate or unordered funding history.")
+    for row, timestamp in zip(rows, times):
+        rate, mark = Decimal(row["fundingRate"]), Decimal(row["markPrice"])
+        if (row["symbol"] != symbol or not start_ms <= timestamp < end_ms
+                or not rate.is_finite() or not mark.is_finite() or mark <= 0):
+            raise ValueError("Invalid funding record or missing settlement mark price.")
+    # BTCUSDT's observed eight-hour schedule: reject missing settlements explicitly.
+    if symbol == "BTCUSDT":
+        period = 8 * 3_600_000
+        expected = list(range(start_ms // period, end_ms // period))
+        if [timestamp // period for timestamp in times] != expected:
+            raise ValueError("BTCUSDT funding does not cover every eight-hour settlement; review interval changes.")
+        if any(timestamp % period >= MINUTE_MS for timestamp in times):
+            raise ValueError("Unexpected BTCUSDT funding settlement timing.")
+
+
+MINUTE_MS = 60_000
+
+
+def fetch_funding(symbol, start, end):
+    start_ms, end_ms = int(start.timestamp()) * 1000, int(end.timestamp()) * 1000
+    cursor, records, sources = start_ms, [], []
+    while cursor < end_ms:
+        url = FUNDING_API + "?" + urlencode(dict(symbol=symbol, startTime=cursor, endTime=end_ms - 1, limit=1000))
+        payload = get_bytes(url)
+        batch = json.loads(payload)
+        if not isinstance(batch, list):
+            raise ValueError("Funding API returned an error rather than settlement records.")
+        sources.append({"url": url, "response_sha256": hashlib.sha256(payload).hexdigest()})
+        if not batch:
+            break
+        records.extend(batch)
+        next_cursor = int(batch[-1]["fundingTime"]) + 1
+        if next_cursor <= cursor:
+            raise ValueError("Funding API pagination did not advance.")
+        cursor = next_cursor
+        if len(batch) < 1000:
+            break
+    validate_funding(records, symbol, start_ms, end_ms)
+    print(f"{symbol}: verified {len(records)} historical funding settlements", flush=True)
+    return records, sources
+
+
 def main(argv=None):
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--symbol", default="BTCUSDT")
+    parser.add_argument("--market", choices=["spot", "usdm"], default="spot",
+                        help="Spot or USDT-margined perpetual futures (includes funding history).")
     parser.add_argument("--timeframes", nargs="+", choices=INTERVALS, default=list(INTERVALS))
     parser.add_argument("--start", type=utc_date, default=today - timedelta(days=30))
     parser.add_argument("--end", type=utc_date, default=today, help="Exclusive UTC date (YYYY-MM-DD).")
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "data/raw/binance")
+    parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args(argv)
     symbol = args.symbol.strip().upper()
     if not re.fullmatch(r"[A-Z0-9]{2,30}", symbol):
@@ -126,17 +182,19 @@ def main(argv=None):
     if not args.start < args.end <= today:
         parser.error("Use start < end <= today's UTC date; only complete days can be downloaded.")
     intervals = list(dict.fromkeys(args.timeframes))
-    destination = args.output_dir / symbol / f"{args.start:%Y-%m-%d}_{args.end:%Y-%m-%d}"
+    output_dir = args.output_dir or ROOT / ("data/raw/binance-futures" if args.market == "usdm" else "data/raw/binance")
+    destination = output_dir / symbol / f"{args.start:%Y-%m-%d}_{args.end:%Y-%m-%d}"
     if destination.exists():
         parser.error(f"Output already exists: {destination}. Choose another --output-dir.")
-    print(f"Binance SPOT {symbol}: {args.start.isoformat()} to {args.end.isoformat()} (exclusive)", flush=True)
+    print(f"Binance {args.market.upper()} {symbol}: {args.start.isoformat()} to {args.end.isoformat()} (exclusive)", flush=True)
     try:
         with ThreadPoolExecutor(max_workers=3) as pool:
             results = list(pool.map(
-                lambda interval: fetch_interval(symbol, interval, args.start, args.end), intervals
+                lambda interval: fetch_interval(symbol, interval, args.start, args.end, args.market), intervals
             ))
+        funding, funding_sources = fetch_funding(symbol, args.start, args.end) if args.market == "usdm" else (None, None)
         manifest = {
-            "source": "Binance public data", "market": "spot", "symbol": symbol,
+            "source": "Binance public data", "market": args.market, "symbol": symbol,
             "start_inclusive": args.start.isoformat(), "end_exclusive": args.end.isoformat(),
             "timezone": "UTC", "generated_at": datetime.now(timezone.utc).isoformat(),
             "documentation": "https://github.com/binance/binance-public-data",
@@ -162,6 +220,12 @@ def main(argv=None):
                     "missing_candles": 0, "duplicate_candles": 0,
                     "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "archives": sources,
                 })
+            if funding is not None:
+                path = staging / "funding.json"
+                path.write_text(json.dumps(funding, indent=2) + "\n", encoding="utf-8")
+                manifest["funding"] = {"file": path.name, "rows": len(funding),
+                                       "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                                       "sources": funding_sources, "includes_settlement_mark_prices": True}
             (staging / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
             staging.rename(destination)
         print(f"Saved: {destination.resolve()}", flush=True)

@@ -23,7 +23,22 @@ recording** when finished; the saved history remains visible.
 The app currently collects and monitors data. The paper-trading engine is not
 implemented yet. Yahoo collection remains available at `/yahoo`.
 
-## Binance spot historical candles
+## Binance historical candles
+
+Download BTC/USDT USDT-margined perpetual futures candles and historical
+funding settlements for October 24–November 22, 2026:
+
+```bash
+python3 scripts/fetch_binance.py --market usdm --start 2026-10-24 --end 2026-11-23
+```
+
+Futures CSVs and the funding file/manifest are saved separately under
+`data/raw/binance-futures/BTCUSDT/2026-10-24_2026-11-23/`. The funding API supplies
+each settlement's actual rate, timestamp and mark price. For this BTCUSDT
+window, all 90 eight-hour settlements are required. Archive checksums, native
+timestamps and funding coverage are validated before saving.
+
+### Spot candles
 
 Download BTC/USDT candles for the last 30 complete UTC days at native 1m, 5m
 and 15m intervals without running a recorder or using an API key:
@@ -220,23 +235,40 @@ Yahoo Finance has interval limitations. Intraday intervals such as `1m`, `5m`,
 ## Bitcoin one-minute sharp candle backtest
 
 The [GitHub Pages backtest](https://amrhsnd.github.io/pantred/) starts with a
-**Market data** selector: Binance BTC/USDT spot or the original Hyperliquid BTC
-perpetual recording. Binance offers 1m, 5m and 15m signal intervals. Each dataset
+**Market data** selector: Binance BTC/USDT perpetual futures (default), Binance
+spot, or the original Hyperliquid BTC perpetual recording. Both Binance markets
+offer 1m, 5m and 15m signal intervals. Each dataset
 has the existing twelve sharp-degree/history settings, its own coverage dates,
 fees, order ledger and interactive candlestick charts.
 
-Build the combined report after downloading the Binance data:
+Build the combined report after downloading both Binance futures and spot data:
 
 ```bash
 python3 scripts/market_backtest.py
 ```
 
 This writes `data/processed/market-backtest.html` and a numerical
-`market-backtest.summary.json`. Use `--binance-dir` and `--database` for other
-complete Binance exports or Hyperliquid recordings. The generated HTML is
+`market-backtest.summary.json`. Use `--futures-dir`, `--binance-dir` and
+`--database` for other complete futures/spot exports or Hyperliquid recordings.
+The generated HTML is
 self-contained and is published as `index.html` on the `gh-pages` branch.
 
-Binance uses the standard spot fee of **0.1% on buys and sells**, without a BNB
+Binance futures use **0.02% maker / 0.05% taker** fee assumptions without BNB
+discounts. Resting entries and targets use maker fees; an immediately marketable
+entry at activation and stop exits use taker fees. Fees apply to executed
+notional, with constant BTC position size. The model retains independent
+1,000-USDT notional orders, with no leverage, capital or margin/liquidation model.
+Stops use contract prices, rather than mark-price triggers.
+
+Historical futures funding is included separately from trading fees, using
+`−BTC size × settlement mark price × funding rate` for a long position. Positive
+cash flows are receipts; negative cash flows are payments. Minute candles
+cannot determine whether a fill or exit preceded a settlement in that same
+minute. Such cases are flagged: possible charges are included, while uncertain
+credits are withheld. Funding is included through the data end for positions
+still open. Win/loss classification and net P&L include modeled funding.
+
+Binance spot uses the standard fee of **0.1% on buys and sells**, without a BNB
 discount or VIP tier. The buy fee reduces BTC received; the sell fee applies
 to proceeds from the remaining BTC. Closed-order buy fees are valued at the
 exit price so gross minus fees reconciles exactly with net proceeds. The
@@ -254,8 +286,10 @@ Initial history bars provide warmup, and no pre-window data is invented.
 Binance candle-based fills and the shorter Hyperliquid tick replay are separate
 samples. They do not provide a controlled exchange comparison. Each order
 uses independent 1,000-unit quote notional without account capital limits;
-funding, extra slippage, liquidity and exchange size rounding are excluded.
-Open P&L is excluded while incurred entry fees are included.
+extra slippage, liquidity and exchange size rounding are excluded. Funding is
+included for Binance futures and remains excluded from the original Hyperliquid
+replay. Open P&L is excluded while incurred entry fees and futures funding are
+included.
 
 ### Original Hyperliquid report
 

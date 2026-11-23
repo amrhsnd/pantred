@@ -119,6 +119,34 @@ generated order was checked for activation/expiration boundaries and
 gross-minus-fees reconciliation. Binance's 36 configurations were all net
 negative under these assumptions; this differs from a tick-accurate replay.
 
+## 23 November 2026: Binance perpetual futures fees and funding
+
+The market selector now defaults to Binance BTCUSDT USDT-margined perpetual
+futures, with 1m, 5m and 15m signal intervals and the existing twelve settings
+per interval. Spot and Hyperliquid remain selectable, with their complete data
+and replay results unchanged from the previous published report.
+
+Futures data was downloaded for the same October 24–November 22 UTC window:
+54,720 candles across 90 verified archives, plus all 90 historical funding
+settlements with their associated mark prices. Native 5m and 15m OHLCV and
+trade counts reconciled against their constituent one-minute futures candles.
+
+Futures fees use 0.02% maker / 0.05% taker assumptions without BNB discounts.
+Immediately marketable entries at activation and stop exits use taker fees;
+resting entries and targets use maker fees. Position BTC size stays constant.
+Funding is a separate signed cash flow using settlement mark price and the
+historical rate. Uncertain entry/exit-minute funding includes possible charges
+and withholds uncertain credits, with affected orders flagged. This remains a
+conservative candle replay of independent 1,000-USDT orders, without leverage,
+capital limits or margin/liquidation simulation.
+
+All 48 unit tests passed, including maker/taker classification, signed funding,
+funding boundaries, ambiguity, coverage and fee accounting. Generated order
+activation/expiry boundaries and gross-minus-fees-plus-funding reconciliation
+were checked throughout. The default 1m/68%/30-bar run returned −723.11 USDT
+after fees and funding; no futures configuration had positive net results,
+and some sparse 15m settings had no fills.
+
 ## Current boundaries
 
 The standalone sharp-candle research reports now include an order/fill replay;

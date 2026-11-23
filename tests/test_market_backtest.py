@@ -88,5 +88,83 @@ class MarketBacktestTest(unittest.TestCase):
         self.assertEqual(calls, [(30 * MINUTE, 40 * MINUTE)])
 
 
+class FuturesReplayTest(unittest.TestCase):
+    def replay(self, bars, funding=None, end=20 * MINUTE, target="110"):
+        return CandleReplay(bars, market="usdm", funding=funding or [])(
+            Decimal(100), Decimal(90), Decimal(target), MINUTE, 10 * MINUTE, end, [], [])
+
+    def event(self, minute, rate, mark="120"):
+        return {"fundingTime": minute * MINUTE + 3, "fundingRate": str(rate), "markPrice": mark}
+
+    def test_futures_reject_missing_funding_input(self):
+        with self.assertRaisesRegex(ValueError, "requires historical funding"):
+            CandleReplay([], market="usdm")
+
+    def test_resting_entry_and_target_use_maker_fees_on_constant_size(self):
+        order = self.replay([bar(1, 105, 108, 102, 104), bar(2, 104, 108, 99, 101),
+                             bar(3, 105, 111, 101, 110)])
+        self.assertEqual(order['entry_liquidity'], 'Maker')
+        self.assertAlmostEqual(order['fees'], .42)
+        self.assertAlmostEqual(order['gross'], 100)
+        self.assertAlmostEqual(order['pnl'], 99.58)
+
+    def test_immediately_marketable_entry_uses_taker_fee(self):
+        order = self.replay([bar(1, 100, 111, 99, 110)])
+        self.assertEqual(order['entry_liquidity'], 'Taker')
+        self.assertAlmostEqual(order['fees'], .72)
+        self.assertAlmostEqual(order['pnl'], 99.28)
+
+    def test_stop_exit_uses_taker_fee(self):
+        order = self.replay([bar(2, 104, 108, 99, 101), bar(3, 100, 105, 89, 95)])
+        self.assertAlmostEqual(order['fees'], .65)
+        self.assertAlmostEqual(order['pnl'], -100.65)
+
+    def test_funding_uses_historical_mark_and_sign(self):
+        bars = [bar(1, 100, 105, 99, 101), bar(5, 105, 111, 100, 110)]
+        for rate, cashflow in (("0.001", -1.2), ("-0.001", 1.2)):
+            with self.subTest(rate=rate):
+                order = self.replay(bars, [self.event(3, rate)])
+                self.assertAlmostEqual(order['funding'], cashflow)
+                self.assertEqual(order['funding_events'], 1)
+                self.assertFalse(order['funding_ambiguous'])
+                self.assertAlmostEqual(order['pnl'], 100 - .72 + cashflow)
+
+    def test_entry_and_exit_minute_funding_is_conservative(self):
+        bars = [bar(1, 100, 105, 99, 101), bar(5, 105, 111, 100, 110)]
+        for minute in (1, 5):
+            for rate, cashflow in (("0.001", -1.2), ("-0.001", 0)):
+                with self.subTest(minute=minute, rate=rate):
+                    order = self.replay(bars, [self.event(minute, rate)])
+                    self.assertAlmostEqual(order['funding'], cashflow)
+                    self.assertTrue(order['funding_ambiguous'])
+
+    def test_funding_excludes_before_fill_after_exit_and_at_data_end(self):
+        bars = [bar(2, 104, 108, 99, 101), bar(5, 105, 111, 100, 110)]
+        events = [self.event(i, '.001') for i in (0, 1, 6, 20)]
+        self.assertEqual(self.replay(bars, events)['funding'], 0)
+        opened = self.replay(bars[:1], [{"fundingTime": 20 * MINUTE,
+                                        "fundingRate": ".001", "markPrice": "120"}])
+        self.assertEqual(opened['funding'], 0)
+
+    def test_open_position_and_unfilled_order_funding(self):
+        event = self.event(3, '.001')
+        opened = self.replay([bar(1, 100, 105, 99, 101)], [event])
+        self.assertEqual(opened['status'], 'Open')
+        self.assertAlmostEqual(opened['fees'], .5)
+        self.assertAlmostEqual(opened['funding'], -1.2)
+        self.assertIsNone(opened['pnl'])
+        unfilled = self.replay([bar(1, 105, 108, 102, 104)], [event])
+        self.assertEqual(unfilled['funding'], 0)
+        self.assertEqual(unfilled['fees'], 0)
+
+    def test_win_loss_classification_includes_funding(self):
+        bars = [bar(1, 100, '100.01', 99, 100), bar(5, 100, '100.02', 99, '100.02')]
+        without = self.replay(bars, target='100.02')
+        funded = self.replay(bars, [self.event(3, '-.001', mark='100')], target='100.02')
+        self.assertEqual(without['status'], 'Loss')
+        self.assertEqual(funded['status'], 'Win')
+        self.assertAlmostEqual(funded['gross'] - funded['fees'] + funded['funding'], funded['pnl'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -5,7 +5,7 @@ import io
 import unittest
 import zipfile
 
-from scripts.fetch_binance import FIELDS, parse_archive
+from scripts.fetch_binance import FIELDS, parse_archive, validate_funding
 
 
 class BinanceArchiveTest(unittest.TestCase):
@@ -47,6 +47,20 @@ class BinanceArchiveTest(unittest.TestCase):
 
     def test_legacy_millisecond_archives_match_microseconds(self):
         self.assertEqual(self.parse(self.rows(False)), self.parse(self.rows(True)))
+
+    def test_futures_header_and_millisecond_rows(self):
+        header = "open_time,open,high,low,close,volume,close_time,quote_volume,count,taker_buy_volume,taker_buy_quote_volume,ignore".split(',')
+        self.assertEqual(self.parse([header] + self.rows(False)), self.parse(self.rows(True)))
+
+    def test_funding_schedule_rejects_gaps_duplicates_and_invalid_marks(self):
+        start = int(self.day.timestamp()) * 1000
+        rows = [{"symbol": "BTCUSDT", "fundingTime": start + i * 28_800_000 + 3,
+                 "fundingRate": "0.0001", "markPrice": "100"} for i in range(3)]
+        validate_funding(rows, "BTCUSDT", start, start + 86_400_000)
+        for changed in (rows[:-1], rows + [rows[-1]], [{**row, "markPrice": "0"} for row in rows]):
+            with self.subTest(changed=changed):
+                with self.assertRaises(ValueError):
+                    validate_funding(changed, "BTCUSDT", start, start + 86_400_000)
 
     def test_checksum_tampering_is_rejected(self):
         payload, checksum = self.archive(self.rows())
