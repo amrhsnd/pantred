@@ -147,6 +147,26 @@ were checked throughout. The default 1m/68%/30-bar run returned −723.11 USDT
 after fees and funding; no futures configuration had positive net results,
 and some sparse 15m settings had no fills.
 
+## 23 November 2026: Strategy comparison across markets
+
+The report adds a top-of-page comparison heatmap for all 84 combinations of
+market/timeframe and strategy settings. Nineteen selectable metrics cover
+profitability, average closed-trade results, fees, funding and order/outcome
+counts. Each column ranks within its own market/timeframe; the underlying
+sample dates, currencies and execution methods remain visible. Selecting a
+cell opens its strategy and orders. A separate expanded table exposes all
+metrics for the selected dataset.
+
+Settings without closed trades are displayed but not ranked; unavailable
+funding and undefined profit factors remain distinct from observed zeroes.
+Equal values share ranks. Cost and ambiguity metrics rank lower values first;
+activity counts are explicitly distinguished from profitability.
+
+Six new JavaScript tests cover economic reconciliation, denominators, missing
+values, no-trade settings, ties and profit-factor boundaries. The existing
+48 Python tests passed. All 84 comparison summaries were checked against
+the source orders, and the complete backtest payload remained unchanged.
+
 ## Current boundaries
 
 The standalone sharp-candle research reports now include an order/fill replay;

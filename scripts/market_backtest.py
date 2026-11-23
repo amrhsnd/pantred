@@ -231,7 +231,8 @@ def main(argv=None):
     # Keep the script-disabled fallback useful without embedding thousands of SVGs.
     fallback = {**catalog[0], "runs": [{**run, "orders": run["orders"][:3]} for run in catalog[0]["runs"]]}
     template = (ROOT / "web/market_backtest.html").read_text(encoding="utf-8")
-    for key, value in dict(DATA=json.dumps(catalog, separators=(",", ":")),
+    for key, value in dict(METRICS_JS=(ROOT / "web/backtest_metrics.js").read_text(encoding="utf-8"),
+                           DATA=json.dumps(catalog, separators=(",", ":")),
                            EXPIRY=args.order_expiration, PREVIEW=preview(fallback, args.order_expiration)).items():
         template = template.replace("{{" + key + "}}", str(value))
     args.output.parent.mkdir(parents=True, exist_ok=True)

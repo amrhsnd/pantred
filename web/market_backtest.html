@@ -7,6 +7,7 @@
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f4f4ef;color:#192725;font:15px Inter,system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:36px 4vw}header,nav,.bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}h1{font-size:clamp(29px,4vw,52px);margin:8px 0;letter-spacing:-.055em}h2{font-size:21px;letter-spacing:-.03em}small,p,summary{color:#52625e}summary{cursor:pointer}a{color:#146a51}select,button{font:inherit;padding:7px 11px;border:1px solid #bdcac1;background:white;border-radius:5px;cursor:pointer}select{max-width:100%}button:disabled{opacity:.4}section{background:white;padding:16px 20px;border:1px solid #d2dad3;border-radius:10px;margin:16px 0}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:15px}.stats b{display:block;font-size:24px}svg{width:100%;display:block;background:#132a27;border-radius:6px}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}td,th{padding:8px;text-align:right;white-space:nowrap;border-bottom:1px solid #e1e6df}td:first-child,th:first-child{text-align:left}tbody tr{cursor:pointer}tr.selected{background:#ddf1e7}.scroll{overflow:auto;max-height:305px}th{position:sticky;top:0;background:white}.loss{color:#a43f38}.win{color:#146a51}#trade{line-height:1.6}label{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}#preview details{margin:10px 0}#preview summary{padding:6px 0}#preview svg{max-width:600px}.notice{padding:12px 16px;border-left:3px solid #a57b28;background:#fff8e6;line-height:1.6}.source{line-height:1.6}#controls{justify-content:flex-start;gap:18px}#assumptions{line-height:1.65}#loadError{color:#a43f38}
 @media(max-width:550px){main{padding:22px 4vw}section{padding:14px}#controls label{width:100%;justify-content:space-between}#controls select{max-width:70%}.stats{grid-template-columns:repeat(2,1fr)}}
+.comparison-scroll{overflow-x:auto}.comparison-grid{display:grid;grid-template-columns:112px repeat(var(--market-count),minmax(105px,1fr));gap:5px;min-width:880px;margin:15px 0}.comparison-grid .axis{font-size:12px;line-height:1.4;align-self:center}.comparison-grid .column{text-align:center;padding:5px;font-size:12px;line-height:1.5}.comparison-grid .column.active{box-shadow:inset 0 -3px #bd8a24}.heat-cell{position:relative;border:0;border-radius:4px;padding:7px 3px;min-height:43px;font-size:12px;font-variant-numeric:tabular-nums;line-height:1.3}.heat-cell small{display:block;color:inherit;font-size:11px}.heat-cell.current{outline:2px solid #bd8a24;outline-offset:-2px}.heat-cell.unranked{background:#f0f1ee;color:#52625e}.comparison-legend{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12px;margin:12px 0}.comparison-gradient{width:90px;height:12px;background:linear-gradient(90deg,#eaf1f3,#165d72);border-radius:2px}.comparison-caption{font-size:13px;line-height:1.6}.comparison-table{max-height:440px;overflow:auto;margin-top:12px}.comparison-table td,.comparison-table th{font-size:13px}.comparison-table caption{text-align:left;padding:8px 0;color:#52625e}.comparison-table th:first-child,.comparison-table td:first-child{position:sticky;left:0;background:white;z-index:1}.comparison-table tr.selected td:first-child{background:#ddf1e7}.comparison-table th:first-child{z-index:3}#comparisonSummary{line-height:1.6}#comparisonMetric{max-width:100%}
 </style>
 <main>
 <small>PANTRED &nbsp; / &nbsp; STRATEGY RESEARCH</small>
@@ -20,6 +21,18 @@
 <label>Sharp history <select id="history"></select></label>
 </nav>
 <p class="source" id="datasetInfo"></p><p id="feeInfo"></p>
+</section>
+<section aria-labelledby="comparisonTitle">
+<nav><h2 id="comparisonTitle">Which settings performed better?</h2><label>Compare metric <select id="comparisonMetric"></select></label></nav>
+<p id="comparisonDescription" class="comparison-caption"></p>
+<div class="comparison-scroll" role="region" aria-label="Settings comparison across markets and timeframes">
+<div id="comparisonGrid" class="comparison-grid" role="group" aria-label="Metric heatmap; choose a result to open its strategy settings"></div>
+</div>
+<div class="comparison-legend"><span class="comparison-gradient" aria-hidden="true"></span><span>Lighter = weaker relative rank · darker = stronger relative rank</span><span>Gold outline = selected setting · gray = unranked</span></div>
+<p id="comparisonRule" class="comparison-caption"></p>
+<p class="comparison-caption">Each column ranks its own market and timeframe. Binance covers October 24–November 22; Hyperliquid covers October 20–21 and uses recorded trades. These samples and execution methods differ. Selecting a cell opens its settings and orders below.</p>
+<p id="comparisonSummary" aria-live="polite"></p>
+<details><summary>All metrics for the selected market and timeframe</summary><div class="comparison-table"><table><caption id="comparisonTableCaption"></caption><thead id="comparisonTableHead"></thead><tbody id="comparisonTableBody"></tbody></table></div></details>
 </section>
 <p class="notice" id="executionNote"></p>
 <section><div class="stats" id="stats"></div><p id="totals"></p></section>
@@ -37,6 +50,7 @@
 </main>
 <script>
 'use strict';
+{{METRICS_JS}}
 const catalog={{DATA}};
 const el=id=>document.getElementById(id);
 const fmt=n=>n.toLocaleString('en-US',{maximumFractionDigits:5});
@@ -45,6 +59,60 @@ const money=n=>amount(n)+' '+data.currency;
 const date=t=>new Date(t).toISOString().slice(5,19).replace('T',' ');
 const clock=t=>date(t).slice(6,11);
 let data=catalog[0],visible=[],index=0;
+const metrics=PantredMetrics.definitions;
+const comparisonData=catalog.map((dataset,index)=>({dataset,index,rows:dataset.runs.map(run=>PantredMetrics.summarize(run,dataset.market))}));
+function metricDisplay(value,definition){
+  if(value==null)return '—';
+  if(value===Infinity)return '∞';
+  if(definition.unit==='count')return value.toLocaleString('en-US');
+  if(definition.unit==='percent')return value.toFixed(1)+'%';
+  if(definition.unit==='ratio')return value.toFixed(2);
+  return amount(value);
+}
+function marketShort(market){return market==='binance-futures'?'Binance futures':market==='binance'?'Binance spot':'Hyperliquid perpetual';}
+function chooseComparison(datasetIndex,degree,history){
+  const selected=catalog[datasetIndex];
+  el('market').value=selected.market;chooseMarket();
+  el('timeframe').value=selected.interval;chooseTimeframe();
+  el('degree').value=degree;el('history').value=history;el('filter').value='All outcomes';refresh();
+}
+function renderComparison(){
+  const definition=metrics.find(m=>m.key===el('comparisonMetric').value);
+  const ranked=comparisonData.map(item=>({...item,rows:PantredMetrics.rank(item.rows,definition.key)}));
+  const pairs=[...new Map(catalog.flatMap(d=>d.runs.map(r=>[r.degree+':'+r.history,[r.degree,r.history]]))).values()];
+  el('comparisonGrid').style.setProperty('--market-count',ranked.length);
+  let html='<div class="axis">Sharp degree /<br>history bars</div>';
+  for(const item of ranked)html+='<div class="column '+(item.dataset===data?'active':'')+'">'+marketShort(item.dataset.market)+'<br><b>'+item.dataset.interval+'</b>'+(definition.unit==='money'?' · '+item.dataset.currency:'')+'</div>';
+  for(const [degree,history] of pairs){
+    html+='<div class="axis"><b>'+degree+'%</b> · '+history+' bars</div>';
+    for(const item of ranked){
+      const row=item.rows.find(r=>r.degree===degree&&r.history===history);
+      if(!row){html+='<div class="heat-cell unranked">Not available</div>';continue;}
+      const value=metricDisplay(row[definition.key],definition);
+      const current=item.dataset===data&&degree===Number(el('degree').value)&&history===Number(el('history').value);
+      let style='',extra=row.closed+' closed',reason='Rank '+row.rank+' within this market and timeframe';
+      if(row.rank!=null){
+        const t=row.strength,from=[234,241,243],to=[22,93,114];
+        const rgb=from.map((v,i)=>Math.round(v+(to[i]-v)*t));
+        const luminance=rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+        style='background:rgb('+rgb.join(',')+');color:'+(luminance>.179?'#000':'#fff');
+      }else if(!row.closed){extra='No closed trades';reason='Unranked: no closed trades';}
+      else{extra='Not ranked';reason=definition.key==='profit_factor'?'Undefined: no net gains or losses':item.dataset.market==='binance'?'Not applicable':'Not modeled';}
+      const label=marketShort(item.dataset.market)+' '+item.dataset.interval+', '+degree+'% degree, '+history+' bars: '+definition.label+' '+value+(definition.unit==='money'?' '+item.dataset.currency:'')+'. '+reason+'. '+row.closed+' closed trades. Open setting.';
+      html+='<button class="heat-cell '+(row.rank==null?'unranked ':'')+(current?'current':'')+'" style="'+style+'" data-comparison="'+item.index+':'+degree+':'+history+'" aria-pressed="'+current+'" aria-label="'+label+'" title="'+label+'"><span>'+value+'</span><small>'+(row.rank===1?'#1 · ':'')+extra+'</small></button>';
+    }
+  }
+  el('comparisonGrid').innerHTML=html;
+  el('comparisonDescription').textContent=definition.description;
+  el('comparisonRule').textContent=(definition.direction==='asc'?'Lower values rank first.':'Higher values rank first.')+' Rankings require at least one closed trade. Activity and cost rankings do not establish profitability. Values are shown directly; colors compare ranks within each column.';
+  const selected=ranked.find(item=>item.dataset===data);
+  const leaders=selected.rows.filter(row=>row.rank===1);
+  el('comparisonSummary').textContent=leaders.length?'Selected market: '+marketShort(data.market)+' '+data.interval+' · '+(definition.direction==='asc'?'Lowest':'Highest')+' '+definition.label.toLowerCase()+': '+leaders.map(row=>row.degree+'% / '+row.history+' bars ('+metricDisplay(row[definition.key],definition)+(definition.unit==='money'?' '+data.currency:'')+'; '+row.closed+' closed)').join(', ')+'.':'No ranked settings for this metric in the selected market.';
+  el('comparisonTableCaption').textContent=data.label+' · '+data.interval+' · monetary values in '+data.currency+' · sorted by '+definition.label.toLowerCase()+'. Unranked settings appear last.';
+  el('comparisonTableHead').innerHTML='<tr><th>Degree / history</th>'+metrics.map(m=>'<th>'+m.label+'</th>').join('')+'</tr>';
+  const sorted=[...selected.rows].sort((a,b)=>(a.rank??Infinity)-(b.rank??Infinity)||a.degree-b.degree||b.history-a.history);
+  el('comparisonTableBody').innerHTML=sorted.map(row=>'<tr class="'+(row.degree===Number(el('degree').value)&&row.history===Number(el('history').value)?'selected':'')+'"><td><button data-setting="'+row.degree+':'+row.history+'">'+row.degree+'% / '+row.history+' bars</button></td>'+metrics.map(m=>'<td>'+metricDisplay(row[m.key],m)+'</td>').join('')+'</tr>').join('');
+}
 function options(id, values, label){
   const previous=el(id).value;el(id).replaceChildren();
   for(const value of values)el(id).add(new Option(label(value),value));
@@ -86,7 +154,7 @@ function refresh(){
   el('totals').textContent=wins+' wins ('+money(gain)+') · '+losses+' losses ('+money(loss)+') · '+count('Expired')+' expired · '+count('Pending')+' pending · '+count('Open')+' open · '+run.invalid+' setups with invalid levels'+(data.market.startsWith('binance')?' · '+ambiguous+' orders with intrabar ambiguity':'')+(data.market==='binance-futures'?' · '+pool.filter(o=>o.funding_ambiguous).length+' orders with funding timing ambiguity':'');
   visible=pool.filter(o=>el('filter').value==='All outcomes'||o.status===el('filter').value);index=0;
   el('rows').innerHTML=visible.map((o,j)=>'<tr><td><button data-j="'+j+'">'+o.sym+' #'+(o.k+1)+'</button></td>'+[date(o.time),o.side,fmt(o.entry),fmt(o.stop),fmt(o.target),o.status,o.reason??'—',o.gross==null?'—':money(o.gross),money(o.fees),data.market==='binance-futures'?money(o.funding):'—',o.pnl==null?'—':money(o.pnl),o.entry_liquidity??'—',data.market.startsWith('binance')?(o.ambiguous?'Yes · conservative':'No'):'Trade replay',data.market==='binance-futures'?(o.funding_ambiguous?'Yes · conservative':'No'):'—'].map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('');
-  draw();
+  renderComparison();draw();
 }
 function draw(){
   const o=visible[index];el('prev').disabled=index<=0;el('next').disabled=index>=visible.length-1;
@@ -108,6 +176,10 @@ function draw(){
   el('trade').textContent='1–3 = signal candles · Activated '+date(o.time)+' UTC'+(o.fill?' · F = fill '+date(o.fill)+' at '+fmt(o.entry):'')+(o.exit?' · X = '+o.reason+' exit '+date(o.exit)+' at '+fmt(o.out)+' · '+money(o.pnl):'')+(o.ambiguous?' · Intrabar ambiguity: conservative execution applied.':'');
 }
 try{
+  for(const metric of metrics)el('comparisonMetric').add(new Option(metric.label,metric.key));
+  el('comparisonMetric').onchange=renderComparison;
+  el('comparisonGrid').onclick=e=>{const button=e.target.closest('button[data-comparison]');if(button)chooseComparison(...button.dataset.comparison.split(':').map(Number));};
+  el('comparisonTableBody').onclick=e=>{const button=e.target.closest('button[data-setting]');if(button)chooseComparison(catalog.indexOf(data),...button.dataset.setting.split(':').map(Number));};
   el('market').onchange=chooseMarket;el('timeframe').onchange=chooseTimeframe;
   for(const name of ['degree','history','filter'])el(name).onchange=refresh;
   el('rows').onclick=e=>{const row=e.target.closest('tr');if(row){index=row.sectionRowIndex;draw();}};

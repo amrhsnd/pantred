@@ -241,6 +241,15 @@ offer 1m, 5m and 15m signal intervals. Each dataset
 has the existing twelve sharp-degree/history settings, its own coverage dates,
 fees, order ledger and interactive candlestick charts.
 
+The comparison heatmap at the top shows all twelve degree/history combinations
+across all seven market/timeframe datasets. Choose among nineteen metrics,
+including net P&L, average net per closed trade, win rate, profit factor, fees,
+funding and order counts. Colors show relative rank within each column; exact
+values and closed-trade counts remain visible. Settings without closed trades
+are unranked, and unmodeled funding is shown as unavailable rather than zero.
+Click a cell to open that market, interval and strategy setting below. Expand
+the all-metrics table to inspect every metric for the selected dataset.
+
 Build the combined report after downloading both Binance futures and spot data:
 
 ```bash
