@@ -10,7 +10,10 @@ from pathlib import Path
 import sqlite3
 import webbrowser
 
-from trade_preview import preview
+try:
+    from .trade_preview import preview
+except ImportError:
+    from trade_preview import preview
 
 ROOT = Path(__file__).resolve().parents[1]
 MINUTE = 60_000
@@ -77,7 +80,8 @@ def load_recording(connection, history):
     return bars, times, prices, start, end
 
 
-def backtest(bars, times, prices, start, end, history, degree, expiration):
+def backtest(bars, times, prices, start, end, history, degree, expiration,
+             replayer=None, step=MINUTE):
     sharp, orders = [], []
     invalid = 0
     ranges = [high - low for _, _, high, low, _ in bars]
@@ -97,9 +101,9 @@ def backtest(bars, times, prices, start, end, history, degree, expiration):
         if not stop < low < target:
             invalid += 1
             continue
-        active = time + MINUTE
-        order = replay_order(low, stop, target, active, active + expiration * MINUTE,
-                             end, times, prices)
+        active = time + step
+        order = (replayer or replay_order)(low, stop, target, active,
+                                          active + expiration * MINUTE, end, times, prices)
         order.update(i=index, side="Green" if middle_change > 0 else "Red")
         orders.append(order)
     return dict(history=history, degree=degree, orders=orders, invalid=invalid)

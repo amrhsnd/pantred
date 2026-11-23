@@ -76,11 +76,58 @@ The [VM test report](VM_RECORDING_TEST.md) records the measured coverage and
 remaining limits. Reusable scripts support bounded recording, read-only health
 checks, SQLite online snapshots, auditing and a fixed local snapshot dashboard.
 
+## 23 November 2026: Binance historical spot candles
+
+Historical candles can be downloaded on demand without continuously recording.
+The standalone `scripts/fetch_binance.py` fetches Binance spot archives for
+BTC/USDT at native 1m, 5m and 15m intervals, verifies published SHA-256 checksums
+and complete UTC-day coverage, and saves decimal strings plus normalized
+millisecond timestamps in CSVs with a source manifest. It uses only Python's
+standard library and requires no API key. Existing download directories are
+not overwritten; unavailable or incomplete archives fail explicitly.
+
+The October 24–November 22 UTC download contains 43,200 one-minute, 8,640
+five-minute and 2,880 fifteen-minute candles. All 90 archive checksums passed,
+with no missing or duplicate candles. Every native 5m and 15m candle reconciled
+against constituent 1m OHLC, volume and trade-count data (quote volumes within
+the source decimal precision). All 26 unit tests passed, including six new
+archive-integrity, timestamp, coverage and OHLCV tests.
+
+These are Binance spot candles rather than Hyperliquid perpetuals. They do not
+contain the intraminute trade sequence required by the existing tick replay
+backtest. Daily archives are published the following day; a recent unavailable
+archive may require retrying later. No trading or recorder workflow was changed.
+
+## 23 November 2026: Market-selectable sharp-candle research report
+
+`scripts/market_backtest.py` builds a self-contained report with a market-data
+selector at the beginning. Binance BTC/USDT spot supports 1m, 5m and 15m signals;
+the original Hyperliquid BTC perpetual recording remains available at 1m.
+Each dataset retains the twelve degree/history combinations and shows its
+own dates, currency, fees, charts and order ledger.
+
+Binance uses standard 0.1% spot buy/sell fees without BNB discounts. Buy fees
+reduce BTC received, and sell fees apply to net BTC proceeds. All Binance
+signal intervals execute on the one-minute feed with a ten-minute entry
+expiration. Intrabar uncertainty uses stop-first handling and defers an
+unproven entry-minute target touch; affected orders are flagged. Results
+represent independent 1,000-unit orders, not a funded account simulation.
+
+All 37 unit tests passed. Generated Hyperliquid candles and every order in
+all twelve runs matched the previous GitHub Pages payload exactly. Every
+generated order was checked for activation/expiration boundaries and
+gross-minus-fees reconciliation. Binance's 36 configurations were all net
+negative under these assumptions; this differs from a tick-accurate replay.
+
 ## Current boundaries
 
+The standalone sharp-candle research reports now include an order/fill replay;
+they are separate from the collector and do not implement a paper-trading
+account or live execution.
+
 - Available: collection, local persistence, monitoring, history export.
-- Not available: a paper-trading account, strategies, P&L, simulated order fills,
-  live order execution, international economic feeds or social-platform feeds.
+- Not available in the collector: a paper-trading account, live strategy or
+  order execution, international economic feeds or social-platform feeds.
 - Live views require the recording process and internet access. Saved history
   remains visible when recording stops.
 - Heikin Ashi prices are derived values, not prices at which orders can execute.

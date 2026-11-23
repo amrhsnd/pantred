@@ -23,6 +23,31 @@ recording** when finished; the saved history remains visible.
 The app currently collects and monitors data. The paper-trading engine is not
 implemented yet. Yahoo collection remains available at `/yahoo`.
 
+## Binance spot historical candles
+
+Download BTC/USDT candles for the last 30 complete UTC days at native 1m, 5m
+and 15m intervals without running a recorder or using an API key:
+
+```bash
+python3 scripts/fetch_binance.py
+```
+
+For the fixed October 24–November 22, 2026 window:
+
+```bash
+python3 scripts/fetch_binance.py --start 2026-10-24 --end 2026-11-23
+```
+
+The end date is exclusive. Outputs are separate CSVs and a source/checksum
+manifest under `data/raw/binance/BTCUSDT/2026-10-24_2026-11-23/`. Existing
+download directories are never overwritten; use `--output-dir` for a new copy.
+Prices are USDT, volumes are BTC and timestamps are UTC milliseconds, with an
+additional readable UTC datetime. These are **spot** candles, separate from
+Hyperliquid perpetuals. The script checks archive SHA-256 checksums, OHLCV values
+and every expected timestamp before saving. Incomplete downloads fail explicitly.
+Binance publishes daily archives the following day, so the latest complete day
+may need a later retry. See [Binance public data](https://github.com/binance/binance-public-data).
+
 ## Hyperliquid Perpetual Collector
 
 Python 3.11+ is required. Install `requirements.txt` first. Public mainnet data
@@ -193,6 +218,46 @@ Yahoo Finance has interval limitations. Intraday intervals such as `1m`, `5m`,
 `15m`, and `1h` usually only work for recent periods.
 
 ## Bitcoin one-minute sharp candle backtest
+
+The [GitHub Pages backtest](https://amrhsnd.github.io/pantred/) starts with a
+**Market data** selector: Binance BTC/USDT spot or the original Hyperliquid BTC
+perpetual recording. Binance offers 1m, 5m and 15m signal intervals. Each dataset
+has the existing twelve sharp-degree/history settings, its own coverage dates,
+fees, order ledger and interactive candlestick charts.
+
+Build the combined report after downloading the Binance data:
+
+```bash
+python3 scripts/market_backtest.py
+```
+
+This writes `data/processed/market-backtest.html` and a numerical
+`market-backtest.summary.json`. Use `--binance-dir` and `--database` for other
+complete Binance exports or Hyperliquid recordings. The generated HTML is
+self-contained and is published as `index.html` on the `gh-pages` branch.
+
+Binance uses the standard spot fee of **0.1% on buys and sells**, without a BNB
+discount or VIP tier. The buy fee reduces BTC received; the sell fee applies
+to proceeds from the remaining BTC. Closed-order buy fees are valued at the
+exit price so gross minus fees reconciles exactly with net proceeds. The
+fee schedule was checked on November 23, 2026; account-specific rates and
+historical promotions are not reconstructed.
+
+All Binance signal intervals execute against one-minute candles. Stop wins
+if both exit levels occur within a minute. On the entry minute, a target is
+accepted only when the open/close establishes that it occurred after entry;
+otherwise the target touch is deferred. The ledger flags intrabar ambiguity.
+Stops that gap through the stop level exit at the minute's opening price.
+Unfilled orders expire after **10 minutes**, including on 5m and 15m signals.
+Initial history bars provide warmup, and no pre-window data is invented.
+
+Binance candle-based fills and the shorter Hyperliquid tick replay are separate
+samples. They do not provide a controlled exchange comparison. Each order
+uses independent 1,000-unit quote notional without account capital limits;
+funding, extra slippage, liquidity and exchange size rounding are excluded.
+Open P&L is excluded while incurred entry fees are included.
+
+### Original Hyperliquid report
 
 From the repository root, replay the October VM snapshot and open its interactive order ledger and candlestick chart:
 
