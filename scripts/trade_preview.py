@@ -9,24 +9,25 @@ def utc(ms):
 
 def candle_chart(bars, order, expiry):
     index = order["i"]
-    active = bars[index][0] + 60_000
+    interval = bars[1][0] - bars[0][0]
+    active = bars[index][0] + interval
     until = order["exit"] or (active + expiry * 60_000 if order["status"] == "Expired"
-                              else bars[-1][0] + 60_000)
+                              else bars[-1][0] + interval)
     start = max(0, index - 8)
-    candles = bars[start:index + 6 + (until - active) // 60_000]
+    candles = bars[start:index + 6 + (until - active) // interval]
     low = min(order["stop"], *(bar[3] for bar in candles))
     high = max(order["target"], *(bar[2] for bar in candles))
     step = 320 / len(candles)
 
     def x(time):
-        return 8 + (time - candles[0][0]) / 60_000 * step
+        return 8 + (time - candles[0][0]) / interval * step
 
     def y(price):
         return 243 - (price - low) / (high - low) * 218
 
     pieces = ['<svg viewBox="0 0 336 284" role="img" aria-label="BTC candlesticks with entry, stop and target">']
     for idx, (time, opening, hi, lo, close) in enumerate(candles, start):
-        center = x(time + 30_000)
+        center = x(time + interval / 2)
         color = "#7adab5" if close >= opening else "#f29a87"
         pieces.append(f'<path stroke="{color}" d="M{center:.2f} {y(hi):.2f}V{y(lo):.2f}"/>'
                       f'<path stroke="{color}" stroke-width="{max(.5, step*.62):.2f}" '
@@ -50,11 +51,11 @@ def preview(data, expiry):
         orders = run["orders"]
         net = sum((o["gross"] or 0) - o["fees"] + o.get("funding", 0) for o in orders)
         filled = sum(o["fill"] is not None for o in orders)
-        pieces.append(f'<details {"open" if idx == 0 else ""}><summary><b>{run["degree"]}% degree · '
-                      f'{run["history"]} candles</b> · net ${net:,.2f}</summary>'
+        pieces.append(f'<details {"open" if idx == 0 else ""}><summary><b>&gt; {run["threshold"]}% range threshold'
+                      f'</b> · net ${net:,.2f}</summary>'
                       f'<p>{len(orders)} orders · {filled} filled</p>')
         for number, order in enumerate(orders, 1):
-            time = utc(data["bars"][order["i"]][0] + 60_000)
+            time = utc(data["bars"][order["i"]][0] + data["bars"][1][0] - data["bars"][0][0])
             pnl = "" if order["pnl"] is None else f' · net ${order["pnl"]:,.2f}'
             pieces.append(f'<details {"open" if idx == 0 and number == 1 else ""}><summary>'
                           f'#{number} · {time} UTC · {order["status"]}{pnl}</summary>'

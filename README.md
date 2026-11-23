@@ -232,35 +232,47 @@ data/raw/
 Yahoo Finance has interval limitations. Intraday intervals such as `1m`, `5m`,
 `15m`, and `1h` usually only work for recent periods.
 
-## Bitcoin one-minute sharp candle backtest
+## No-history sharp candle backtest
 
-The [GitHub Pages backtest](https://amrhsnd.github.io/pantred/) starts with a
-**Market data** selector: Binance BTC/USDT perpetual futures (default), Binance
-spot, or the original Hyperliquid BTC perpetual recording. Both Binance markets
-offer 1m, 5m and 15m signal intervals. Each dataset
-has the existing twelve sharp-degree/history settings, its own coverage dates,
-fees, order ledger and interactive candlestick charts.
+This branch implements the three-candle strategy at
+[its own GitHub Pages address](https://amrhsnd.github.io/pantred/no_history/).
+The [main strategy report](https://amrhsnd.github.io/pantred/) remains separate.
 
-The comparison heatmap at the top shows all twelve degree/history combinations
-across all seven market/timeframe datasets. Choose among nineteen metrics,
-including net P&L, average net per closed trade, win rate, profit factor, fees,
-funding and order counts. Colors show relative rank within each column; exact
-values and closed-trade counts remain visible. Settings without closed trades
-are unranked, and unmodeled funding is shown as unavailable rather than zero.
-Click a cell to open that market, interval and strategy setting below. Expand
-the all-metrics table to inspect every metric for the selected dataset.
+For the last three completed candles, let `R = high − low` and
+`B = |close − open|`. Candle 2 is sharp when **both** conditions hold:
 
-Build the combined report after downloading both Binance futures and spot data:
+- `100 × R2 > x × (R1 + R2 + R3)`, for **x = 50, 60, 70**.
+- `100 × B2 > 80 × R2` (body strictly greater than 80% of its range).
+
+Length includes wicks. Both comparisons are strict; equality does not qualify.
+Only these three candles determine a signal. No historical warmup, additional
+sharpness checks on candles 1/3, or candle-color filters apply. A zero-range
+middle candle cannot be sharp.
+
+Buy limit = **close 3**, stop loss = **low 1**, take profit = **high 2**.
+Only `stop < entry < target` setups qualify. Orders activate after candle 3
+closes; unfilled orders expire after ten minutes, including for 5m/15m signals.
+The existing limit-fill, stop-first, trading-fee and funding models are retained.
+
+The report has the same market/timeframe selectors, nineteen comparison metrics,
+order ledger and candlestick charts as the main report. The threshold selector
+replaces the former degree/history selectors. It compares all three thresholds
+across seven datasets: Binance BTC/USDT perpetual futures and spot at 1m, 5m
+and 15m, plus the October Hyperliquid BTC perpetual recording at 1m.
+
+Build the report after downloading both Binance futures and spot data:
 
 ```bash
 python3 scripts/market_backtest.py
+# Optional custom thresholds:
+python3 scripts/market_backtest.py --sharp-threshold 50 60 70
 ```
 
-This writes `data/processed/market-backtest.html` and a numerical
-`market-backtest.summary.json`. Use `--futures-dir`, `--binance-dir` and
-`--database` for other complete futures/spot exports or Hyperliquid recordings.
-The generated HTML is
-self-contained and is published as `index.html` on the `gh-pages` branch.
+This writes `data/processed/no-history-backtest.html` and
+`no-history-backtest.summary.json`. Use `--futures-dir`, `--binance-dir` and
+`--database` for other complete exports or recordings. The generated HTML is
+self-contained and is published as `no_history/index.html` on the `gh-pages`
+branch; its root `index.html` serves the main strategy.
 
 Binance futures use **0.02% maker / 0.05% taker** fee assumptions without BNB
 discounts. Resting entries and targets use maker fees; an immediately marketable
@@ -290,7 +302,7 @@ accepted only when the open/close establishes that it occurred after entry;
 otherwise the target touch is deferred. The ledger flags intrabar ambiguity.
 Stops that gap through the stop level exit at the minute's opening price.
 Unfilled orders expire after **10 minutes**, including on 5m and 15m signals.
-Initial history bars provide warmup, and no pre-window data is invented.
+The first signal can use the first three complete in-window candles; no pre-window data is needed.
 
 Binance candle-based fills and the shorter Hyperliquid tick replay are separate
 samples. They do not provide a controlled exchange comparison. Each order
@@ -300,7 +312,7 @@ included for Binance futures and remains excluded from the original Hyperliquid
 replay. Open P&L is excluded while incurred entry fees and futures funding are
 included.
 
-### Original Hyperliquid report
+### Hyperliquid-only no-history report
 
 From the repository root, replay the October VM snapshot and open its interactive order ledger and candlestick chart:
 
@@ -308,9 +320,9 @@ From the repository root, replay the October VM snapshot and open its interactiv
 python3 scripts/sharp_backtest.py --open
 ```
 
-Send `data/processed/BTC-1m-backtest.html` to share the result. The recipient can open it in a browser offline. The exporter uses Python's standard library. Use `--database PATH` for another Pantred SQLite recording with BTC trade prints and one-minute candles. The replay covers whole minutes within the recorded trade window. Use `--help` for the sharpness, lookback, expiration and output options.
+Send `data/processed/BTC-1m-no-history.html` to share the result. The recipient can open it in a browser offline. The exporter uses Python's standard library. Use `--database PATH` for another Pantred SQLite recording with BTC trade prints and one-minute candles. The replay covers whole minutes within the recorded trade window. Use `--help` for the threshold, expiration and output options.
 
-The default BTC report compares sharp degrees 68%, 100%, 168% and 250% over histories of 30, 20 and 10 candles. Choose either parameter above the chart. For a custom grid, pass multiple integers to each flag, e.g. `--sharp-degree 68 100 --sharp-history 30 20`.
+The default BTC report compares range thresholds 50%, 60% and 70%, with the same strict body > 80% rule. For a custom set, use `--sharp-threshold 50 60 70`.
 
 BTC replay fees use the Hyperliquid base perpetual tier. Resting entries and target exits assume a 0.015% maker fee, and stop exits assume a 0.045% taker fee. Each fee uses its executed notional. Win rate and profit factor use after-fee closed trades. Funding and additional slippage are excluded.
 

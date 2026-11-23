@@ -162,28 +162,28 @@ def main(argv=None):
     parser.add_argument("--futures-dir", type=Path,
                         default=ROOT / "data/raw/binance-futures/BTCUSDT/2026-10-24_2026-11-23")
     parser.add_argument("--database", type=Path, default=SNAPSHOT)
-    parser.add_argument("--output", type=Path, default=ROOT / "data/processed/market-backtest.html")
-    parser.add_argument("--sharp-history", type=int, nargs="+", default=[30, 20, 10])
-    parser.add_argument("--sharp-degree", type=int, nargs="+", default=[68, 100, 168, 250])
+    parser.add_argument("--output", type=Path, default=ROOT / "data/processed/no-history-backtest.html")
+    parser.add_argument("--sharp-threshold", type=int, nargs="+", default=[50, 60, 70],
+                        help="Middle range must strictly exceed this percent of the three ranges.")
     parser.add_argument("--order-expiration", type=int, default=10, help="Minutes, for every interval.")
     args = parser.parse_args(argv)
-    if min(args.sharp_history) < 1 or min(args.sharp_degree) < 0 or args.order_expiration < 1:
-        parser.error("History and expiration must be positive; degree must be nonnegative.")
+    if min(args.sharp_threshold) < 0 or max(args.sharp_threshold) > 100 or args.order_expiration < 1:
+        parser.error("Threshold must be 0–100 and expiration must be positive.")
     if args.output.suffix.lower() != ".html":
         parser.error("Choose an .html output file.")
-    histories, degrees = list(dict.fromkeys(args.sharp_history)), list(dict.fromkeys(args.sharp_degree))
+    thresholds = list(dict.fromkeys(args.sharp_threshold))
     catalog = []
     execution_bars, futures_start, futures_end, futures_manifest = load_binance(args.futures_dir, "1m", "usdm")
     funding = load_funding(args.futures_dir, futures_manifest, futures_start, futures_end)
     for interval, step in INTERVALS.items():
         bars, start, end, manifest = load_binance(args.futures_dir, interval, "usdm")
-        if len(bars) < max(histories) + 3:
-            parser.error(f"Not enough {interval} futures candles for the requested history.")
+        if len(bars) < 3:
+            parser.error(f"Not enough {interval} futures candles for a three-candle setup.")
         if (start, end) != (futures_start, futures_end):
             parser.error("Futures signal and execution windows differ.")
         replay = CandleReplay(execution_bars, market="usdm", funding=funding)
-        runs = [backtest(bars, [], [], start, end, history, degree, args.order_expiration,
-                         replayer=replay, step=step) for degree in degrees for history in histories]
+        runs = [backtest(bars, [], [], start, end, threshold, args.order_expiration,
+                         replayer=replay, step=step) for threshold in thresholds]
         catalog.append(dataset(
             "binance-futures", interval, bars, start, end, runs,
             label="Binance · BTC/USDT perpetual futures", symbol="BTC/USDT PERP", currency="USDT",
@@ -198,14 +198,13 @@ def main(argv=None):
         print(f"Binance futures {interval}: {len(bars):,} candles; {sum(len(r['orders']) for r in runs):,} orders across {len(runs)} settings", flush=True)
     for interval, step in INTERVALS.items():
         bars, start, end, manifest = load_binance(args.binance_dir, interval)
-        # Keep the first lookback bars as warmup; do not invent pre-window history.
-        if len(bars) < max(histories) + 3:
-            parser.error(f"Not enough {interval} candles for the requested history.")
+        if len(bars) < 3:
+            parser.error(f"Not enough {interval} candles for a three-candle setup.")
         # The 1m execution feed preserves minute expiry for every signal interval.
         execution_bars, _, _, _ = load_binance(args.binance_dir, "1m") if interval != "1m" else (bars, start, end, manifest)
         replay = CandleReplay(execution_bars)
-        runs = [backtest(bars, [], [], start, end, history, degree, args.order_expiration,
-                         replayer=replay, step=step) for degree in degrees for history in histories]
+        runs = [backtest(bars, [], [], start, end, threshold, args.order_expiration,
+                         replayer=replay, step=step) for threshold in thresholds]
         catalog.append(dataset(
             "binance", interval, bars, start, end, runs, label="Binance · BTC/USDT spot",
             symbol="BTC/USDT", currency="USDT", execution="1m candles · conservative fills",
@@ -217,9 +216,9 @@ def main(argv=None):
         print(f"Binance {interval}: {len(bars):,} candles; {sum(len(r['orders']) for r in runs):,} orders across {len(runs)} settings", flush=True)
     with closing(sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         db.execute("BEGIN")
-        bars, times, prices, start, end = load_recording(db, max(histories))
-    runs = [backtest(bars, times, prices, start, end, history, degree, args.order_expiration)
-            for degree in degrees for history in histories]
+        bars, times, prices, start, end = load_recording(db)
+    runs = [backtest(bars, times, prices, start, end, threshold, args.order_expiration)
+            for threshold in thresholds]
     catalog.append(dataset(
         "hyperliquid", "1m", bars, start, end, runs, label="Hyperliquid · BTC perpetual",
         symbol="BTC", currency="USD", execution="Recorded trades · tick replay",
@@ -238,7 +237,7 @@ def main(argv=None):
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(template, encoding="utf-8")
     summary = [{"market": item["market"], "interval": item["interval"], "window": item["window"],
-                "runs": [{"history": run["history"], "degree": run["degree"],
+                "runs": [{"threshold": run["threshold"],
                           "orders": len(run["orders"]),
                           "wins": sum(o["status"] == "Win" for o in run["orders"]),
                           "losses": sum(o["status"] == "Loss" for o in run["orders"]),

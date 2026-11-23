@@ -167,6 +167,40 @@ values, no-trade settings, ties and profit-factor boundaries. The existing
 48 Python tests passed. All 84 comparison summaries were checked against
 the source orders, and the complete backtest payload remained unchanged.
 
+## 23 November 2026: No-history three-candle strategy
+
+The `no_history` branch replaces the lookback classifier with a rule based only
+on the last three completed candles. Candle length includes wicks (`high − low`).
+Candle 2 must account for strictly more than 50%, 60% or 70% of their summed
+ranges, and its body must cover strictly more than 80% of its own range.
+Equality does not qualify. No historical warmup or candle-color filters apply.
+
+The buy limit is close 3, stop loss is low 1, and take profit is high 2; only
+strictly ordered levels qualify. Activation follows candle 3's close. The
+existing ten-minute unfilled-order expiry, conservative execution, independent
+1,000-unit notional, fee and historical funding models are retained.
+
+Both exporters use `--sharp-threshold` (default `50 60 70`). The combined report
+retains all seven datasets, nineteen metrics, charts and ledger, with a single
+threshold selector and three comparison rows. The standalone Hyperliquid
+export uses the same signal rules. The branch report is prepared for
+`/pantred/no_history/` alongside the main report on the existing `gh-pages`
+branch, whose root report is preserved.
+
+All 56 Python tests and six JavaScript tests passed. Tests cover strict range
+and body boundaries, independence from earlier candles, both sharp colors,
+third-candle colors/dojis, window/gap boundaries and exact order levels. All
+2,750 generated orders across 21 runs were audited for signal/level validity,
+threshold subsets, activation/expiry bounds and P&L reconciliation. Both HTML
+exports passed JavaScript syntax checks; browser preview confirmed threshold
+and timeframe changes update the metrics and charts.
+
+For the existing October 24–November 22 Binance futures 1m sample, net results
+including modeled fees/funding are −464.62, −173.99 and −79.70 USDT for 50%,
+60% and 70%, respectively. These are independent-order research results,
+not account returns. The 15m/60% result is +1.78 USDT from only two closed
+trades; 15m/70% produces no orders.
+
 ## Current boundaries
 
 The standalone sharp-candle research reports now include an order/fill replay;

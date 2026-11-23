@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Sharp-candle strategy research using Binance perpetual futures, historical funding, spot history and Hyperliquid recorded trades.">
-<title>Pantred · Sharp candle backtest</title>
+<title>Pantred · No-history sharp candle backtest</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f4f4ef;color:#192725;font:15px Inter,system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:36px 4vw}header,nav,.bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}h1{font-size:clamp(29px,4vw,52px);margin:8px 0;letter-spacing:-.055em}h2{font-size:21px;letter-spacing:-.03em}small,p,summary{color:#52625e}summary{cursor:pointer}a{color:#146a51}select,button{font:inherit;padding:7px 11px;border:1px solid #bdcac1;background:white;border-radius:5px;cursor:pointer}select{max-width:100%}button:disabled{opacity:.4}section{background:white;padding:16px 20px;border:1px solid #d2dad3;border-radius:10px;margin:16px 0}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:15px}.stats b{display:block;font-size:24px}svg{width:100%;display:block;background:#132a27;border-radius:6px}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}td,th{padding:8px;text-align:right;white-space:nowrap;border-bottom:1px solid #e1e6df}td:first-child,th:first-child{text-align:left}tbody tr{cursor:pointer}tr.selected{background:#ddf1e7}.scroll{overflow:auto;max-height:305px}th{position:sticky;top:0;background:white}.loss{color:#a43f38}.win{color:#146a51}#trade{line-height:1.6}label{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}#preview details{margin:10px 0}#preview summary{padding:6px 0}#preview svg{max-width:600px}.notice{padding:12px 16px;border-left:3px solid #a57b28;background:#fff8e6;line-height:1.6}.source{line-height:1.6}#controls{justify-content:flex-start;gap:18px}#assumptions{line-height:1.65}#loadError{color:#a43f38}
 @media(max-width:550px){main{padding:22px 4vw}section{padding:14px}#controls label{width:100%;justify-content:space-between}#controls select{max-width:70%}.stats{grid-template-columns:repeat(2,1fr)}}
@@ -11,15 +11,16 @@
 </style>
 <main>
 <small>PANTRED &nbsp; / &nbsp; STRATEGY RESEARCH</small>
-<header><h1>Sharp candle backtest</h1><strong id="marketBadge">BTC/USDT · 1m</strong></header>
+<header><h1>No-history sharp candle backtest</h1><strong id="marketBadge">BTC/USDT · 1m</strong></header>
 <div id="interactive" hidden>
 <section aria-label="Backtest selection">
 <nav id="controls" aria-label="Market data and strategy parameters">
 <label>Market data <select id="market"><option value="binance-futures">Binance · BTC/USDT perpetual futures</option><option value="binance">Binance · BTC/USDT spot</option><option value="hyperliquid">Hyperliquid · BTC perpetual</option></select></label>
 <label>Timeframe <select id="timeframe"></select></label>
-<label>Sharp degree <select id="degree"></select></label>
-<label>Sharp history <select id="history"></select></label>
+<label>Range threshold <select id="threshold"></select></label>
 </nav>
+<p>Range 2 / (range 1 + range 2 + range 3) &gt; selected threshold · Body 2 / range 2 &gt; 80%. Buy limit: close 3 · Stop: low 1 · Take profit: high 2.</p>
+<p><a href="/pantred/">Main strategy report</a> · Branch: <a href="https://github.com/amrhsnd/pantred/tree/no_history">no_history</a></p>
 <p class="source" id="datasetInfo"></p><p id="feeInfo"></p>
 </section>
 <section aria-labelledby="comparisonTitle">
@@ -39,8 +40,8 @@
 <section><nav><h2 id="chartTitle">Order detail</h2><div><button id="prev" aria-label="Previous order">←</button> <button id="next" aria-label="Next order">→</button></div></nav><svg id="chart" viewBox="0 0 1000 680" role="img" aria-label="Candlestick chart with signal candles, order levels, fill and exit"></svg><p id="trade"></p></section>
 <section><nav><h2>Order ledger</h2><label>Outcome <select id="filter"><option>All outcomes</option><option>Win</option><option>Loss</option><option>Flat</option><option>Expired</option><option>Pending</option><option>Open</option></select></label></nav><div class="scroll"><table><thead><tr><th>Market</th><th>Signal close · UTC</th><th>Sharp candle</th><th>Buy limit</th><th>Stop</th><th>Target</th><th>Outcome</th><th>Exit reason</th><th id="grossHeader">Gross USDT</th><th id="feesHeader">Fees USDT</th><th id="fundingHeader">Funding USDT</th><th id="netHeader">Net USDT</th><th>Entry liquidity</th><th>Intrabar ambiguity</th><th>Funding timing ambiguity</th></tr></thead><tbody id="rows"></tbody></table></div></section>
 <details id="assumptions"><summary>Signal and execution assumptions</summary>
-<p>A sharp body covers at least 68% of its own range and exceeds <span id="degreeText"></span>% of the mean high–low range of the previous <span id="historyText"></span> bars of either color. Candle 2 alone must be sharp. A doji has no color. Initial history bars are warmup and cannot generate signals.</p>
-<p>Both sharp colors can generate buys. Entry is low 3, stop is low 1. The target is high 3 for matching colors and low 3 otherwise. An opposite-color or doji third candle has its target at entry and is skipped. Only stop &lt; entry &lt; target qualifies. Orders activate after candle 3 and expire after {{EXPIRY}} minutes if unfilled, for every signal timeframe. Filled positions remain open until an exit or the end of available data.</p>
+<p>Only the last three completed candles are used. Length means high minus low, including wicks. Candle 2 is sharp when its range is strictly greater than <span id="thresholdText"></span>% of the sum of all three ranges, and its body |close − open| is strictly greater than 80% of its own range. No earlier history or color filter is used; zero-range candles cannot be sharp.</p>
+<p>Both sharp colors can generate buys, regardless of candle 3’s color. The buy limit is close 3, stop is low 1, and take profit is high 2. Only stop &lt; entry &lt; target qualifies. Orders activate after candle 3 and expire after {{EXPIRY}} minutes if unfilled, for every signal timeframe. Filled positions remain open until an exit or the end of available data.</p>
 <p>Each order uses 1,000 units of the quote currency as independent notional and can overlap others. This is a setup study without an account balance or capital constraint. Net P&amp;L deducts all incurred trading fees including open entry fees and includes available historical futures funding; unrealized gains/losses are excluded. Win rate and profit factor use closed trades after fees and modeled funding. Leverage, margin/liquidation, extra slippage, queue priority, exchange order-size rounding and liquidity constraints are not modeled. Historical funding is included for Binance futures; Hyperliquid funding remains excluded from its original replay.</p>
 <p id="executionDetails"></p><p id="fundingDetails"></p><p>Fee schedules are tier assumptions, not authenticated account rates or a reconstruction of historical promotions. Binance's standard spot and USD-M fee assumptions were checked November 23, 2026. <a href="https://www.binance.com/en/fee/trading">Binance spot fees</a> · <a href="https://www.binance.com/en/fee/futureFee">Binance futures fees</a> · <a href="https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees">Hyperliquid fees</a>.</p>
 </details>
@@ -70,26 +71,26 @@ function metricDisplay(value,definition){
   return amount(value);
 }
 function marketShort(market){return market==='binance-futures'?'Binance futures':market==='binance'?'Binance spot':'Hyperliquid perpetual';}
-function chooseComparison(datasetIndex,degree,history){
+function chooseComparison(datasetIndex,threshold){
   const selected=catalog[datasetIndex];
   el('market').value=selected.market;chooseMarket();
   el('timeframe').value=selected.interval;chooseTimeframe();
-  el('degree').value=degree;el('history').value=history;el('filter').value='All outcomes';refresh();
+  el('threshold').value=threshold;el('filter').value='All outcomes';refresh();
 }
 function renderComparison(){
   const definition=metrics.find(m=>m.key===el('comparisonMetric').value);
   const ranked=comparisonData.map(item=>({...item,rows:PantredMetrics.rank(item.rows,definition.key)}));
-  const pairs=[...new Map(catalog.flatMap(d=>d.runs.map(r=>[r.degree+':'+r.history,[r.degree,r.history]]))).values()];
+  const thresholds=[...new Set(catalog.flatMap(d=>d.runs.map(r=>r.threshold)))];
   el('comparisonGrid').style.setProperty('--market-count',ranked.length);
-  let html='<div class="axis">Sharp degree /<br>history bars</div>';
+  let html='<div class="axis">Range threshold</div>';
   for(const item of ranked)html+='<div class="column '+(item.dataset===data?'active':'')+'">'+marketShort(item.dataset.market)+'<br><b>'+item.dataset.interval+'</b>'+(definition.unit==='money'?' · '+item.dataset.currency:'')+'</div>';
-  for(const [degree,history] of pairs){
-    html+='<div class="axis"><b>'+degree+'%</b> · '+history+' bars</div>';
+  for(const threshold of thresholds){
+    html+='<div class="axis"><b>&gt; '+threshold+'%</b></div>';
     for(const item of ranked){
-      const row=item.rows.find(r=>r.degree===degree&&r.history===history);
+      const row=item.rows.find(r=>r.threshold===threshold);
       if(!row){html+='<div class="heat-cell unranked">Not available</div>';continue;}
       const value=metricDisplay(row[definition.key],definition);
-      const current=item.dataset===data&&degree===Number(el('degree').value)&&history===Number(el('history').value);
+      const current=item.dataset===data&&threshold===Number(el('threshold').value);
       let style='',extra=row.closed+' closed',reason='Rank '+row.rank+' within this market and timeframe';
       if(row.rank!=null){
         const t=row.strength,from=[234,241,243],to=[22,93,114];
@@ -98,8 +99,8 @@ function renderComparison(){
         style='background:rgb('+rgb.join(',')+');color:'+(luminance>.179?'#000':'#fff');
       }else if(!row.closed){extra='No closed trades';reason='Unranked: no closed trades';}
       else{extra='Not ranked';reason=definition.key==='profit_factor'?'Undefined: no net gains or losses':item.dataset.market==='binance'?'Not applicable':'Not modeled';}
-      const label=marketShort(item.dataset.market)+' '+item.dataset.interval+', '+degree+'% degree, '+history+' bars: '+definition.label+' '+value+(definition.unit==='money'?' '+item.dataset.currency:'')+'. '+reason+'. '+row.closed+' closed trades. Open setting.';
-      html+='<button class="heat-cell '+(row.rank==null?'unranked ':'')+(current?'current':'')+'" style="'+style+'" data-comparison="'+item.index+':'+degree+':'+history+'" aria-pressed="'+current+'" aria-label="'+label+'" title="'+label+'"><span>'+value+'</span><small>'+(row.rank===1?'#1 · ':'')+extra+'</small></button>';
+      const label=marketShort(item.dataset.market)+' '+item.dataset.interval+', '+threshold+'% range threshold: '+definition.label+' '+value+(definition.unit==='money'?' '+item.dataset.currency:'')+'. '+reason+'. '+row.closed+' closed trades. Open setting.';
+      html+='<button class="heat-cell '+(row.rank==null?'unranked ':'')+(current?'current':'')+'" style="'+style+'" data-comparison="'+item.index+':'+threshold+'" aria-pressed="'+current+'" aria-label="'+label+'" title="'+label+'"><span>'+value+'</span><small>'+(row.rank===1?'#1 · ':'')+extra+'</small></button>';
     }
   }
   el('comparisonGrid').innerHTML=html;
@@ -107,11 +108,11 @@ function renderComparison(){
   el('comparisonRule').textContent=(definition.direction==='asc'?'Lower values rank first.':'Higher values rank first.')+' Rankings require at least one closed trade. Activity and cost rankings do not establish profitability. Values are shown directly; colors compare ranks within each column.';
   const selected=ranked.find(item=>item.dataset===data);
   const leaders=selected.rows.filter(row=>row.rank===1);
-  el('comparisonSummary').textContent=leaders.length?'Selected market: '+marketShort(data.market)+' '+data.interval+' · '+(definition.direction==='asc'?'Lowest':'Highest')+' '+definition.label.toLowerCase()+': '+leaders.map(row=>row.degree+'% / '+row.history+' bars ('+metricDisplay(row[definition.key],definition)+(definition.unit==='money'?' '+data.currency:'')+'; '+row.closed+' closed)').join(', ')+'.':'No ranked settings for this metric in the selected market.';
+  el('comparisonSummary').textContent=leaders.length?'Selected market: '+marketShort(data.market)+' '+data.interval+' · '+(definition.direction==='asc'?'Lowest':'Highest')+' '+definition.label.toLowerCase()+': '+leaders.map(row=>row.threshold+'% ('+metricDisplay(row[definition.key],definition)+(definition.unit==='money'?' '+data.currency:'')+'; '+row.closed+' closed)').join(', ')+'.':'No ranked settings for this metric in the selected market.';
   el('comparisonTableCaption').textContent=data.label+' · '+data.interval+' · monetary values in '+data.currency+' · sorted by '+definition.label.toLowerCase()+'. Unranked settings appear last.';
-  el('comparisonTableHead').innerHTML='<tr><th>Degree / history</th>'+metrics.map(m=>'<th>'+m.label+'</th>').join('')+'</tr>';
-  const sorted=[...selected.rows].sort((a,b)=>(a.rank??Infinity)-(b.rank??Infinity)||a.degree-b.degree||b.history-a.history);
-  el('comparisonTableBody').innerHTML=sorted.map(row=>'<tr class="'+(row.degree===Number(el('degree').value)&&row.history===Number(el('history').value)?'selected':'')+'"><td><button data-setting="'+row.degree+':'+row.history+'">'+row.degree+'% / '+row.history+' bars</button></td>'+metrics.map(m=>'<td>'+metricDisplay(row[m.key],m)+'</td>').join('')+'</tr>').join('');
+  el('comparisonTableHead').innerHTML='<tr><th>Range threshold</th>'+metrics.map(m=>'<th>'+m.label+'</th>').join('')+'</tr>';
+  const sorted=[...selected.rows].sort((a,b)=>(a.rank??Infinity)-(b.rank??Infinity)||a.threshold-b.threshold);
+  el('comparisonTableBody').innerHTML=sorted.map(row=>'<tr class="'+(row.threshold===Number(el('threshold').value)?'selected':'')+'"><td><button data-setting="'+row.threshold+'">'+row.threshold+'%</button></td>'+metrics.map(m=>'<td>'+metricDisplay(row[m.key],m)+'</td>').join('')+'</tr>').join('');
 }
 function options(id, values, label){
   const previous=el(id).value;el(id).replaceChildren();
@@ -124,23 +125,23 @@ function chooseMarket(){
 }
 function chooseTimeframe(){
   data=catalog.find(d=>d.market===el('market').value&&d.interval===el('timeframe').value);
-  for(const name of ['degree','history'])options(name,[...new Set(data.runs.map(r=>r[name]))],v=>v+(name==='degree'?'%':' bars'));
+  options('threshold',[...new Set(data.runs.map(r=>r.threshold))],v=>'> '+v+'%');
   el('marketBadge').textContent=data.symbol+' · '+data.interval;
   el('datasetInfo').textContent=data.label+' · '+data.window+' · '+data.bars.length.toLocaleString('en-US')+' candles · '+data.execution+(data.funding_records?' · '+data.funding_records+' funding settlements':'');
   el('feeInfo').replaceChildren(document.createTextNode('Fees: '+data.fee_label+' · '));
   const link=document.createElement('a');link.href=data.fee_url;link.textContent='Exchange fee schedule';el('feeInfo').append(link);
   const binance=data.market.startsWith('binance'),futures=data.market==='binance-futures';
-  el('executionNote').textContent=binance?'Binance fills are estimates from 1-minute candles. Ambiguous bars use stop-first handling; an unproven target touch on the entry minute is deferred. These results cannot reproduce individual-trade replay.':'Hyperliquid uses the original October recorded-trade replay and its own perpetual fees. Its shorter period and execution data differ from Binance; the results are separate samples.';
+  el('executionNote').textContent=binance?'Binance fills are estimates from 1-minute candles. Ambiguous bars use stop-first handling; an unproven target touch on the entry minute is deferred. These results cannot reproduce individual-trade replay.':'Hyperliquid uses the October recorded-trade sample and its own perpetual fees. Its shorter period and execution data differ from Binance; the results are separate samples.';
   el('executionDetails').textContent=binance?'All Binance signal intervals execute against the same 1m candles. A low at or below the buy limit fills at the limit. Stops exit at the stop, or the opening price if a minute opens below it. When both stop and target occur in one minute, the stop wins. On the entry minute, a target is accepted only if the open is at/below entry or the close is at/above target; otherwise that target touch is deferred. Ambiguity is flagged in the ledger. Event times mark minute boundaries rather than exact fill times. The 0.1% buy fee reduces BTC received; the 0.1% sell fee applies to the remaining BTC proceeds. The fee column values the BTC buy fee at exit for closed trades, and at entry for open positions. All prices and P&L are in USDT.':'The first recorded trade at or below the limit fills at the limit. From that print onward, the first stop breach exits at the observed price, or a target touch exits at target. Same-millisecond prints use ascending trade ID. Resting entry and target fills use the 0.015% maker rate; stops use the 0.045% taker rate on executed notional. Recording gaps can affect event order and fills.';
   if(futures)el('executionDetails').textContent='Signals and execution use actual BTCUSDT USDT-margined perpetual futures candles. Every signal interval executes on the 1m futures feed with the same conservative stop-first and entry-minute target rules. Stops trigger on contract prices rather than mark prices. Resting entries and targets assume 0.02% maker fees; immediately marketable entries at activation and stop exits use 0.05% taker fees. Fees use full executed notional; BTC position size remains constant. Entry fills use the limit price without favorable price improvement. There is no leverage multiplier or margin/liquidation simulation.';
-  el('fundingDetails').textContent=futures?'Funding uses all '+data.funding_records+' historical settlement rates and their associated mark prices for this period. For each open long: funding cash flow = −BTC size × settlement mark price × rate. Positive displayed amounts are receipts; negative amounts are payments. Minute candles cannot order a fill or exit against funding within that same minute: possible charges are included and uncertain credits are withheld, with those cases flagged. Funding is included for positions still open at the data end.':'Funding is not applicable to spot and remains excluded from the original Hyperliquid replay.';
+  el('fundingDetails').textContent=futures?'Funding uses all '+data.funding_records+' historical settlement rates and their associated mark prices for this period. For each open long: funding cash flow = −BTC size × settlement mark price × rate. Positive displayed amounts are receipts; negative amounts are payments. Minute candles cannot order a fill or exit against funding within that same minute: possible charges are included and uncertain credits are withheld, with those cases flagged. Funding is included for positions still open at the data end.':'Funding is not applicable to spot and remains excluded from the Hyperliquid replay.';
   for(const [id,label] of [['grossHeader','Gross'],['feesHeader','Fees'],['fundingHeader','Funding'],['netHeader','Net']])el(id).textContent=label+' '+data.currency;
   refresh();
 }
 function refresh(){
-  const degree=Number(el('degree').value),history=Number(el('history').value);
-  const run=data.runs.find(r=>r.degree===degree&&r.history===history);
-  el('degreeText').textContent=degree;el('historyText').textContent=history;
+  const threshold=Number(el('threshold').value);
+  const run=data.runs.find(r=>r.threshold===threshold);
+  el('thresholdText').textContent=threshold;
   const pool=run.orders.map((o,k)=>({...o,k,sym:data.symbol,time:data.bars[o.i][0]+data.step}));
   const count=status=>pool.filter(o=>o.status===status).length;
   const wins=count('Win'),losses=count('Loss'),closed=wins+losses+count('Flat'),filled=closed+count('Open');
@@ -181,7 +182,7 @@ try{
   el('comparisonGrid').onclick=e=>{const button=e.target.closest('button[data-comparison]');if(button)chooseComparison(...button.dataset.comparison.split(':').map(Number));};
   el('comparisonTableBody').onclick=e=>{const button=e.target.closest('button[data-setting]');if(button)chooseComparison(catalog.indexOf(data),...button.dataset.setting.split(':').map(Number));};
   el('market').onchange=chooseMarket;el('timeframe').onchange=chooseTimeframe;
-  for(const name of ['degree','history','filter'])el(name).onchange=refresh;
+  for(const name of ['threshold','filter'])el(name).onchange=refresh;
   el('rows').onclick=e=>{const row=e.target.closest('tr');if(row){index=row.sectionRowIndex;draw();}};
   el('next').onclick=()=>{if(index<visible.length-1){index++;draw();}};el('prev').onclick=()=>{if(index>0){index--;draw();}};
   chooseMarket();el('interactive').hidden=false;el('preview').hidden=true;
