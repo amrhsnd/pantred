@@ -1,0 +1,303 @@
+[
+  {
+    "market": "binance-futures",
+    "interval": "1m",
+    "window": "2026-10-24 00:00 \u2013 2026-11-23 00:00 UTC (end exclusive)",
+    "runs": [
+      {
+        "threshold": 50,
+        "orders": 641,
+        "wins": 51,
+        "losses": 587,
+        "ambiguous": 52,
+        "gross": -11.205594529864209,
+        "fees": 453.157893539308,
+        "funding": -0.2601158819490119,
+        "funding_ambiguous": 1,
+        "net": -464.6236039511212
+      },
+      {
+        "threshold": 60,
+        "orders": 253,
+        "wins": 12,
+        "losses": 239,
+        "ambiguous": 27,
+        "gross": -0.3962328588655905,
+        "fees": 173.58972987709524,
+        "funding": 0.0,
+        "funding_ambiguous": 0,
+        "net": -173.98596273596084
+      },
+      {
+        "threshold": 70,
+        "orders": 124,
+        "wins": 4,
+        "losses": 119,
+        "ambiguous": 19,
+        "gross": 3.1028623148494425,
+        "fees": 82.79798018509118,
+        "funding": 0.0,
+        "funding_ambiguous": 0,
+        "net": -79.69511787024173
+      }
+    ]
+  },
+  {
+    "market": "binance-futures",
+    "interval": "5m",
+    "window": "2026-10-24 00:00 \u2013 2026-11-23 00:00 UTC (end exclusive)",
+    "runs": [
+      {
+        "threshold": 50,
+        "orders": 70,
+        "wins": 20,
+        "losses": 50,
+        "ambiguous": 1,
+        "gross": -20.57032810209251,
+        "fees": 50.479860452788465,
+        "funding": -0.1825364074470287,
+        "funding_ambiguous": 0,
+        "net": -71.23272496232799
+      },
+      {
+        "threshold": 60,
+        "orders": 11,
+        "wins": 5,
+        "losses": 6,
+        "ambiguous": 0,
+        "gross": -4.914391983731894,
+        "fees": 7.995894226274926,
+        "funding": -0.04089921818572034,
+        "funding_ambiguous": 0,
+        "net": -12.95118542819254
+      },
+      {
+        "threshold": 70,
+        "orders": 1,
+        "wins": 0,
+        "losses": 1,
+        "ambiguous": 0,
+        "gross": 0.2822321662901373,
+        "fees": 0.700056446433258,
+        "funding": 0.0,
+        "funding_ambiguous": 0,
+        "net": -0.41782428014312073
+      }
+    ]
+  },
+  {
+    "market": "binance-futures",
+    "interval": "15m",
+    "window": "2026-10-24 00:00 \u2013 2026-11-23 00:00 UTC (end exclusive)",
+    "runs": [
+      {
+        "threshold": 50,
+        "orders": 11,
+        "wins": 3,
+        "losses": 8,
+        "ambiguous": 0,
+        "gross": -37.25791390884829,
+        "fees": 8.879843670360655,
+        "funding": -0.5172903780880372,
+        "funding_ambiguous": 2,
+        "net": -46.65504795729698
+      },
+      {
+        "threshold": 60,
+        "orders": 2,
+        "wins": 1,
+        "losses": 1,
+        "ambiguous": 0,
+        "gross": 3.2743989945722882,
+        "fees": 1.4006548797989145,
+        "funding": -0.09409355822062541,
+        "funding_ambiguous": 1,
+        "net": 1.7796505565527483
+      },
+      {
+        "threshold": 70,
+        "orders": 0,
+        "wins": 0,
+        "losses": 0,
+        "ambiguous": 0,
+        "gross": 0,
+        "fees": 0,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": 0
+      }
+    ]
+  },
+  {
+    "market": "binance",
+    "interval": "1m",
+    "window": "2026-10-24 00:00 \u2013 2026-11-23 00:00 UTC (end exclusive)",
+    "runs": [
+      {
+        "threshold": 50,
+        "orders": 883,
+        "wins": 8,
+        "losses": 867,
+        "ambiguous": 81,
+        "gross": -17.453676596291672,
+        "fees": 1749.090110100484,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -1766.5437866967757
+      },
+      {
+        "threshold": 60,
+        "orders": 399,
+        "wins": 3,
+        "losses": 391,
+        "ambiguous": 49,
+        "gross": -2.3001093068567795,
+        "fees": 787.6014020814956,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -789.9015113883523
+      },
+      {
+        "threshold": 70,
+        "orders": 198,
+        "wins": 2,
+        "losses": 193,
+        "ambiguous": 33,
+        "gross": -3.419494616789993,
+        "fees": 389.798164430261,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -393.21765904705103
+      }
+    ]
+  },
+  {
+    "market": "binance",
+    "interval": "5m",
+    "window": "2026-10-24 00:00 \u2013 2026-11-23 00:00 UTC (end exclusive)",
+    "runs": [
+      {
+        "threshold": 50,
+        "orders": 81,
+        "wins": 1,
+        "losses": 79,
+        "ambiguous": 0,
+        "gross": -35.15787064327039,
+        "fees": 159.8497194165841,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -195.0075900598545
+      },
+      {
+        "threshold": 60,
+        "orders": 21,
+        "wins": 0,
+        "losses": 20,
+        "ambiguous": 0,
+        "gross": -20.21697532602212,
+        "fees": 39.93958626632328,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -60.1565615923454
+      },
+      {
+        "threshold": 70,
+        "orders": 4,
+        "wins": 0,
+        "losses": 4,
+        "ambiguous": 0,
+        "gross": -5.868977768694006,
+        "fees": 7.984267913440381,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -13.853245682134386
+      }
+    ]
+  },
+  {
+    "market": "binance",
+    "interval": "15m",
+    "window": "2026-10-24 00:00 \u2013 2026-11-23 00:00 UTC (end exclusive)",
+    "runs": [
+      {
+        "threshold": 50,
+        "orders": 12,
+        "wins": 1,
+        "losses": 11,
+        "ambiguous": 0,
+        "gross": -37.53498170823869,
+        "fees": 23.912967571565233,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -61.447949279803915
+      },
+      {
+        "threshold": 60,
+        "orders": 2,
+        "wins": 1,
+        "losses": 1,
+        "ambiguous": 0,
+        "gross": 2.9630905546524207,
+        "fees": 4.00392321801875,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -1.0408326633663294
+      },
+      {
+        "threshold": 70,
+        "orders": 0,
+        "wins": 0,
+        "losses": 0,
+        "ambiguous": 0,
+        "gross": 0,
+        "fees": 0,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": 0
+      }
+    ]
+  },
+  {
+    "market": "hyperliquid",
+    "interval": "1m",
+    "window": "2026-10-20 13:44 \u2013 2026-10-21 14:16 UTC (end exclusive)",
+    "runs": [
+      {
+        "threshold": 50,
+        "orders": 27,
+        "wins": 8,
+        "losses": 19,
+        "ambiguous": 0,
+        "gross": 3.764904604812817,
+        "fees": 10.499943086440794,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -6.735038481627977
+      },
+      {
+        "threshold": 60,
+        "orders": 8,
+        "wins": 3,
+        "losses": 5,
+        "ambiguous": 0,
+        "gross": 0.5312196535214971,
+        "fees": 3.299733161303587,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -2.76851350778209
+      },
+      {
+        "threshold": 70,
+        "orders": 2,
+        "wins": 0,
+        "losses": 2,
+        "ambiguous": 0,
+        "gross": -0.4423984000785212,
+        "fees": 0.8997972961745431,
+        "funding": 0,
+        "funding_ambiguous": 0,
+        "net": -1.3421956962530643
+      }
+    ]
+  }
+]
