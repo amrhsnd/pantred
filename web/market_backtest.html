@@ -40,7 +40,8 @@
 const catalog={{DATA}};
 const el=id=>document.getElementById(id);
 const fmt=n=>n.toLocaleString('en-US',{maximumFractionDigits:5});
-const money=n=>(n<0?'−':'')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+data.currency;
+const amount=n=>(n<0?'−':'')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const money=n=>amount(n)+' '+data.currency;
 const date=t=>new Date(t).toISOString().slice(5,19).replace('T',' ');
 const clock=t=>date(t).slice(6,11);
 let data=catalog[0],visible=[],index=0;
@@ -75,7 +76,7 @@ function refresh(){
   const wins=count('Win'),losses=count('Loss'),closed=wins+losses+count('Flat'),filled=closed+count('Open');
   const sum=status=>pool.filter(o=>o.status===status).reduce((v,o)=>v+o.pnl,0),gain=sum('Win'),loss=sum('Loss');
   const fees=pool.reduce((v,o)=>v+o.fees,0),gross=pool.reduce((v,o)=>v+(o.gross??0),0);
-  el('stats').innerHTML=[['Orders',pool.length],['Filled',filled],['Net win rate',closed?(100*wins/closed).toFixed(1)+'%':'—'],['Gross P&L',money(gross)],['Trading fees',money(fees)],['Net P&L',money(gross-fees)],['Profit factor',loss?(gain/-loss).toFixed(2):gain?'∞':'—']].map(([k,v])=>'<div><small>'+k+'</small><b>'+v+'</b></div>').join('');
+  el('stats').innerHTML=[['Orders',pool.length],['Filled',filled],['Net win rate',closed?(100*wins/closed).toFixed(1)+'%':'—'],['Gross P&L · '+data.currency,amount(gross)],['Trading fees · '+data.currency,amount(fees)],['Net P&L · '+data.currency,amount(gross-fees)],['Profit factor',loss?(gain/-loss).toFixed(2):gain?'∞':'—']].map(([k,v])=>'<div><small>'+k+'</small><b>'+v+'</b></div>').join('');
   const ambiguous=pool.filter(o=>o.ambiguous).length;
   el('totals').textContent=wins+' wins ('+money(gain)+') · '+losses+' losses ('+money(loss)+') · '+count('Expired')+' expired · '+count('Pending')+' pending · '+count('Open')+' open · '+run.invalid+' setups with invalid levels'+(data.market==='binance'?' · '+ambiguous+' orders with intrabar ambiguity':'');
   visible=pool.filter(o=>el('filter').value==='All outcomes'||o.status===el('filter').value);index=0;
