@@ -1,5 +1,59 @@
 # pantred: The Trading Helping Panel
 
+## Three-candle FVG + ATR algorithm (`only3_withATR`)
+
+[Open the published ATR report](https://amrhsnd.github.io/pantred/only3_withATR/).
+This branch extends `no_history` with the following **inclusive** signal rules:
+
+| Candle 2 / three-candle measurement | Required value |
+| --- | --- |
+| Body / range | ≥ 80% |
+| Upper wick / range | ≤ 10% |
+| Lower wick / range | ≤ 10% |
+| FVG size / body 2 | ≥ 50% |
+| Range 2 / ATR(x) at candle 2 | ≥ 1.5 |
+
+Range is high − low, body is |close − open|, upper wick is
+high − max(open, close), and lower wick is min(open, close) − low.
+The FVG is the positive gap between candle 1 and candle 3's wicks:
+low 3 − high 1 for a bullish gap, or low 1 − high 3 for a bearish gap.
+Touching or overlapping wicks give no FVG. The earlier range-share threshold
+is replaced by these rules.
+
+The report compares **ATR periods 10, 15, 20, 30 and 50** across the same
+Binance spot/futures 1m, 5m and 15m datasets and Hyperliquid 1m recording.
+ATR uses Wilder's smoothing on the selected market and timeframe. True range
+is max(high − low, |high − previous close|, |low − previous close|).
+The first ATR is the mean of x true ranges; later values are
+(previous ATR × (x − 1) + current TR) / x. The first TR in a contiguous
+segment is high − low. ATR includes candle 2, excludes candle 3 and future
+candles, and needs x candles through candle 2 before a signal is eligible.
+Missing candles restart the warmup. Only ATR uses candles before the pattern.
+
+Existing long order levels remain **entry = close 3, stop = low 1,
+target = high 2**, requiring stop < entry < target. There is no color filter;
+bearish FVG candidates have invalid long levels and are counted as invalid.
+Execution, independent 1,000-unit notional, 10-minute unfilled-order expiry,
+trading fees and funding treatment match the previous report.
+
+Generate the self-contained HTML and summary JSON using the datasets described
+below:
+
+```bash
+python3 scripts/only3_atr.py
+# Optional subset of the supported ATR periods:
+python3 scripts/only3_atr.py --atr-period 10 20 50
+```
+
+Outputs are `data/processed/only3-withATR-backtest.html` and
+`only3-withATR-backtest.summary.json`. The shared `--futures-dir`,
+`--binance-dir`, `--database`, `--output` and `--order-expiration` options
+are supported. Publish the HTML as `only3_withATR/index.html` and the summary
+as `only3_withATR/summary.json` on the existing `gh-pages` branch.
+The market, timeframe and ATR selectors, comparison heatmap, order ledger and
+charts work offline. Each order shows its body, wick, FVG and ATR ratios.
+The prior main report and `/no_history/` report remain available.
+
 Pantred is a market-data research project being developed toward paper trading
 of perpetual futures. Chart-image experiments and Heikin Ashi charts remain
 part of the research direction. There is no order execution or wallet access.

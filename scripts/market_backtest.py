@@ -15,10 +15,12 @@ try:
     from .sharp_backtest import MINUTE, NOTIONAL, ROOT, SNAPSHOT, backtest, load_recording
     from .trade_preview import preview
     from .fetch_binance import validate_funding
+    from .only3_atr import ATR_PERIODS, backtest_atr
 except ImportError:
     from sharp_backtest import MINUTE, NOTIONAL, ROOT, SNAPSHOT, backtest, load_recording
     from trade_preview import preview
     from fetch_binance import validate_funding
+    from only3_atr import ATR_PERIODS, backtest_atr
 
 BINANCE_RATE = Decimal("0.001")
 FUTURES_MAKER = Decimal("0.0002")
@@ -155,23 +157,30 @@ def dataset(market, interval, bars, start, end, runs, **metadata):
                 bars=[[t, *map(float, values)] for t, *values in bars], runs=runs, **metadata)
 
 
-def main(argv=None):
+def main(argv=None, algorithm="no_history"):
+    atr = algorithm == "only3_withATR"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binance-dir", type=Path,
                         default=ROOT / "data/raw/binance/BTCUSDT/2026-10-24_2026-11-23")
     parser.add_argument("--futures-dir", type=Path,
                         default=ROOT / "data/raw/binance-futures/BTCUSDT/2026-10-24_2026-11-23")
     parser.add_argument("--database", type=Path, default=SNAPSHOT)
-    parser.add_argument("--output", type=Path, default=ROOT / "data/processed/no-history-backtest.html")
-    parser.add_argument("--sharp-threshold", type=int, nargs="+", default=[50, 60, 70],
-                        help="Middle range must strictly exceed this percent of the three ranges.")
+    filename = "only3-withATR-backtest.html" if atr else "no-history-backtest.html"
+    parser.add_argument("--output", type=Path, default=ROOT / "data/processed" / filename)
+    if atr:
+        parser.add_argument("--atr-period", type=int, nargs="+", choices=ATR_PERIODS,
+                            default=list(ATR_PERIODS), help="Wilder ATR periods; measured at candle 2.")
+    else:
+        parser.add_argument("--sharp-threshold", type=int, nargs="+", default=[50, 60, 70],
+                            help="Middle range must strictly exceed this percent of the three ranges.")
     parser.add_argument("--order-expiration", type=int, default=10, help="Minutes, for every interval.")
     args = parser.parse_args(argv)
-    if min(args.sharp_threshold) < 0 or max(args.sharp_threshold) > 100 or args.order_expiration < 1:
+    settings = list(dict.fromkeys(args.atr_period if atr else args.sharp_threshold))
+    if min(settings) < 0 or max(settings) > 100 or args.order_expiration < 1:
         parser.error("Threshold must be 0–100 and expiration must be positive.")
     if args.output.suffix.lower() != ".html":
         parser.error("Choose an .html output file.")
-    thresholds = list(dict.fromkeys(args.sharp_threshold))
+    runner = backtest_atr if atr else backtest
     catalog = []
     execution_bars, futures_start, futures_end, futures_manifest = load_binance(args.futures_dir, "1m", "usdm")
     funding = load_funding(args.futures_dir, futures_manifest, futures_start, futures_end)
@@ -182,8 +191,8 @@ def main(argv=None):
         if (start, end) != (futures_start, futures_end):
             parser.error("Futures signal and execution windows differ.")
         replay = CandleReplay(execution_bars, market="usdm", funding=funding)
-        runs = [backtest(bars, [], [], start, end, threshold, args.order_expiration,
-                         replayer=replay, step=step) for threshold in thresholds]
+        runs = [runner(bars, [], [], start, end, setting, args.order_expiration,
+                       replayer=replay, step=step) for setting in settings]
         catalog.append(dataset(
             "binance-futures", interval, bars, start, end, runs,
             label="Binance · BTC/USDT perpetual futures", symbol="BTC/USDT PERP", currency="USDT",
@@ -203,8 +212,8 @@ def main(argv=None):
         # The 1m execution feed preserves minute expiry for every signal interval.
         execution_bars, _, _, _ = load_binance(args.binance_dir, "1m") if interval != "1m" else (bars, start, end, manifest)
         replay = CandleReplay(execution_bars)
-        runs = [backtest(bars, [], [], start, end, threshold, args.order_expiration,
-                         replayer=replay, step=step) for threshold in thresholds]
+        runs = [runner(bars, [], [], start, end, setting, args.order_expiration,
+                       replayer=replay, step=step) for setting in settings]
         catalog.append(dataset(
             "binance", interval, bars, start, end, runs, label="Binance · BTC/USDT spot",
             symbol="BTC/USDT", currency="USDT", execution="1m candles · conservative fills",
@@ -217,8 +226,8 @@ def main(argv=None):
     with closing(sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         db.execute("BEGIN")
         bars, times, prices, start, end = load_recording(db)
-    runs = [backtest(bars, times, prices, start, end, threshold, args.order_expiration)
-            for threshold in thresholds]
+    runs = [runner(bars, times, prices, start, end, setting, args.order_expiration)
+            for setting in settings]
     catalog.append(dataset(
         "hyperliquid", "1m", bars, start, end, runs, label="Hyperliquid · BTC perpetual",
         symbol="BTC", currency="USD", execution="Recorded trades · tick replay",
@@ -230,14 +239,46 @@ def main(argv=None):
     # Keep the script-disabled fallback useful without embedding thousands of SVGs.
     fallback = {**catalog[0], "runs": [{**run, "orders": run["orders"][:3]} for run in catalog[0]["runs"]]}
     template = (ROOT / "web/market_backtest.html").read_text(encoding="utf-8")
+    title = "Three-candle FVG + ATR backtest" if atr else "No-history sharp candle backtest"
+    signal_summary = ("Body 2 / range 2 ≥ 80% · Upper wick 2 / range 2 ≤ 10% · "
+                      "Lower wick 2 / range 2 ≤ 10% · FVG / body 2 ≥ 50% · "
+                      "Range 2 ≥ 1.5 × selected ATR." if atr else
+                      "Range 2 / (range 1 + range 2 + range 3) &gt; selected threshold · "
+                      "Body 2 / range 2 &gt; 80%.")
+    signal_details = (
+        'The pattern uses the last three completed candles. Candle 2 must have body/range ≥ 80%, '
+        'upper wick/range ≤ 10%, lower wick/range ≤ 10%, FVG/body ≥ 50%, and range ≥ 1.5 × '
+        'ATR(<span id="settingText"></span>) at candle 2. Range = high − low; body = |close − open|; '
+        'upper wick = high − max(open, close); lower wick = min(open, close) − low. '
+        'FVG is the positive gap between candle 1 and candle 3’s wicks: low 3 − high 1 (bullish) '
+        'or low 1 − high 3 (bearish). Overlapping or touching wicks have zero FVG. '
+        'All limits are inclusive. There is no range-share or candle-color requirement. '
+        'ATR uses earlier candles from the same market/timeframe: true range = max(high − low, '
+        '|high − previous close|, |low − previous close|). Wilder’s smoothing starts with the mean '
+        'of x true ranges, then ATR = (previous ATR × (x − 1) + TR) / x. The first true range is '
+        'high − low. ATR includes candle 2 and excludes candle 3 and later data. Signals wait '
+        'for x candles through candle 2; missing candles restart ATR warmup. Zero ranges, '
+        'bodies and ATR values are excluded. The existing buy-only execution is retained; '
+        'bearish FVGs cannot satisfy its long stop/entry levels and are counted as invalid.' if atr else
+        'Only the last three completed candles are used. Length means high minus low, including wicks. '
+        'Candle 2 is sharp when its range is strictly greater than <span id="settingText"></span>% '
+        'of the sum of all three ranges, and its body |close − open| is strictly greater than 80% '
+        'of its own range. No earlier history or color filter is used; zero-range candles cannot be sharp.'
+    )
     for key, value in dict(METRICS_JS=(ROOT / "web/backtest_metrics.js").read_text(encoding="utf-8"),
                            DATA=json.dumps(catalog, separators=(",", ":")),
+                           REPORT_CONFIG=json.dumps(dict(atr=atr)), TITLE=title, BRANCH=algorithm,
+                           PARAMETER_LABEL="ATR period" if atr else "Range threshold",
+                           SIGNAL_SUMMARY=signal_summary, SIGNAL_DETAILS=signal_details,
                            EXPIRY=args.order_expiration, PREVIEW=preview(fallback, args.order_expiration)).items():
         template = template.replace("{{" + key + "}}", str(value))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(template, encoding="utf-8")
     summary = [{"market": item["market"], "interval": item["interval"], "window": item["window"],
-                "runs": [{"threshold": run["threshold"],
+                "algorithm": algorithm,
+                "runs": [{("atr_period" if atr else "threshold"): setting,
+                          **({"atr_multiplier": run["atr_multiplier"], "warmup": run["warmup"]} if atr else {}),
+                          "invalid": run["invalid"],
                           "orders": len(run["orders"]),
                           "wins": sum(o["status"] == "Win" for o in run["orders"]),
                           "losses": sum(o["status"] == "Loss" for o in run["orders"]),
@@ -247,7 +288,7 @@ def main(argv=None):
                           "funding": sum(o.get("funding", 0) for o in run["orders"]),
                           "funding_ambiguous": sum(o.get("funding_ambiguous", False) for o in run["orders"]),
                           "net": sum((o["gross"] or 0) - o["fees"] + o.get("funding", 0) for o in run["orders"])}
-                         for run in item["runs"]]} for item in catalog]
+                         for setting, run in zip(settings, item["runs"])]} for item in catalog]
     args.output.with_suffix(".summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(args.output.resolve())
 

@@ -51,7 +51,9 @@ def preview(data, expiry):
         orders = run["orders"]
         net = sum((o["gross"] or 0) - o["fees"] + o.get("funding", 0) for o in orders)
         filled = sum(o["fill"] is not None for o in orders)
-        pieces.append(f'<details {"open" if idx == 0 else ""}><summary><b>&gt; {run["threshold"]}% range threshold'
+        setting = (f'ATR({run["atr_period"]}) · range 2 ≥ 1.5 × ATR' if "atr_period" in run
+                   else f'&gt; {run["threshold"]}% range threshold')
+        pieces.append(f'<details {"open" if idx == 0 else ""}><summary><b>{setting}'
                       f'</b> · net ${net:,.2f}</summary>'
                       f'<p>{len(orders)} orders · {filled} filled</p>')
         for number, order in enumerate(orders, 1):

@@ -32,7 +32,7 @@
     const fees=orders.reduce((sum,o)=>sum+o.fees,0);
     const funding=market==='binance-futures'?orders.reduce((sum,o)=>sum+(o.funding??0),0):null;
     return {
-      threshold:run.threshold, orders:orders.length,
+      threshold:run.threshold, atr_period:run.atr_period, orders:orders.length,
       filled:orders.filter(o=>o.fill!=null).length, closed,
       wins:count('Win'), losses:count('Loss'), flat:count('Flat'),
       expired:count('Expired'), pending:count('Pending'), open:count('Open'), invalid:run.invalid,
@@ -45,20 +45,21 @@
     };
   }
   function rank(rows, key) {
+    const setting=row=>row.atr_period??row.threshold;
     const definition=definitions.find(d=>d.key===key);
     if(!definition)throw new Error('Unknown comparison metric: '+key);
     const eligible=rows.filter(r=>r.closed>0&&r[key]!=null);
-    eligible.sort((a,b)=>a[key]===b[key]?a.threshold-b.threshold:
+    eligible.sort((a,b)=>a[key]===b[key]?setting(a)-setting(b):
       (a[key]<b[key]?-1:1)*(definition.direction==='asc'?1:-1));
     const ranks=new Map();
     let previous,position=0;
     eligible.forEach((row,index)=>{
       if(index===0||row[key]!==previous)position=index+1;
-      previous=row[key];ranks.set(row.threshold,position);
+      previous=row[key];ranks.set(setting(row),position);
     });
     const lastRank=Math.max(1,...ranks.values());
     return rows.map(row=>{
-      const position=ranks.get(row.threshold)??null;
+      const position=ranks.get(setting(row))??null;
       return {...row,rank:position,strength:position==null?null:lastRank===1?.5:1-(position-1)/(lastRank-1)};
     });
   }

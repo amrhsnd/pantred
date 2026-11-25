@@ -2,6 +2,14 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {summarize,rank}=require('../web/backtest_metrics.js');
 
+test('ATR period summaries and rankings keep all five settings distinct',()=>{
+  const rows=[10,15,20,30,50].map((atr_period,index)=>summarize({atr_period,invalid:0,orders:[
+    {fill:1,status:'Win',gross:10-index,fees:1,pnl:9-index}
+  ]},'binance'));
+  assert.deepEqual(rows.map(row=>row.atr_period),[10,15,20,30,50]);
+  assert.deepEqual(rank(rows,'net').map(row=>row.rank),[1,2,3,4,5]);
+});
+
 test('summary reconciles closed net, open costs, funding and denominators',()=>{
   const run={threshold:50,invalid:3,orders:[
     {fill:1,status:'Win',gross:12,fees:2,funding:1,pnl:11},
